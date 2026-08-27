@@ -88,9 +88,9 @@ export const UserDetailPage: React.FC = () => {
           <div className="detail-section">
             <label className="detail-label flex-align" style={{ gap: 4 }}>
               <Mail size={12} />
-              <span>Primary Email</span>
+              <span>Username</span>
             </label>
-            <div className="detail-value">{user.email}</div>
+            <div className="detail-value">@{user.name.toLowerCase().replace(/\s+/g, '_')} ({user.email})</div>
           </div>
 
           <div className="detail-section">

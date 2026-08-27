@@ -80,10 +80,10 @@ export const ArtistDetailPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Primary Email */}
+        {/* Username */}
         <div className="detail-section">
-          <label className="detail-label">Primary Email</label>
-          <div className="detail-value" style={{ fontSize: 15 }}>{application.email}</div>
+          <label className="detail-label">Username</label>
+          <div className="detail-value" style={{ fontSize: 15 }}>@{application.name.toLowerCase().replace(/\s+/g, '_')} ({application.email})</div>
         </div>
 
         {/* Artist Statement */}
