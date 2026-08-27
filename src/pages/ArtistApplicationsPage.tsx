@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Download, Globe, Eye, Filter, Calendar } from 'lucide-react';
 import { INITIAL_ARTIST_APPLICATIONS } from '../data/mockAdminData';
@@ -6,9 +6,34 @@ import type { ArtistApplication } from '../types';
 
 export const ArtistApplicationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [applications] = useState<ArtistApplication[]>(INITIAL_ARTIST_APPLICATIONS);
+  const [applications, setApplications] = useState<ArtistApplication[]>(INITIAL_ARTIST_APPLICATIONS);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  useEffect(() => {
+    fetch('http://localhost:8080/api/v1/admin/artist-applications')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const apiApps: ArtistApplication[] = data.map((app: any) => ({
+            id: String(app.id),
+            name: app.user?.fullName || app.stageName || 'Artist Applicant',
+            title: app.genre || 'Artist',
+            email: app.user?.email || 'N/A',
+            socials: app.socialLinks || '@artist',
+            appliedDate: app.createdAt ? new Date(app.createdAt).toISOString().split('T')[0] : '2026-01-01',
+            status: app.status === 'APPROVED' ? 'Approved' : app.status === 'REJECTED' ? 'Rejected' : 'Pending',
+            avatarUrl: app.user?.profilePicture || '/images/admin_avatar.png',
+            artistStatement: app.bio || 'Applicant bio statement.',
+            externalPortfolios: app.portfolioUrl ? [app.portfolioUrl] : ['instagram.com/artist'],
+          }));
+          setApplications(apiApps);
+        }
+      })
+      .catch(() => {
+        // Fallback to initial mock data
+      });
+  }, []);
 
   const filteredApps = applications.filter(app => {
     const matchesSearch =

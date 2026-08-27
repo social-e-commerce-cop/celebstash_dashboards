@@ -15,6 +15,15 @@ export const ArtistDetailPage: React.FC = () => {
     setApplications((prev) =>
       prev.map((app) => (app.id === application.id ? { ...app, status: newStatus } : app))
     );
+
+    const backendStatus = newStatus === 'Approved' ? 'APPROVED' : newStatus === 'Rejected' ? 'REJECTED' : 'PENDING';
+    fetch(`http://localhost:8080/api/v1/admin/artist-applications/${id}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: backendStatus, reviewNotes: `Updated to ${newStatus}` }),
+    }).catch(() => {
+      // Local state fallback already updated
+    });
   };
 
   if (!application) {

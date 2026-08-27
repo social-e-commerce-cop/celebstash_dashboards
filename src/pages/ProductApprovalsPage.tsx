@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Download, Filter, Calendar, LayoutGrid, List } from 'lucide-react';
 import { INITIAL_PRODUCT_APPROVALS } from '../data/mockAdminData';
@@ -6,10 +6,39 @@ import type { ProductApproval } from '../types';
 
 export const ProductApprovalsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [products] = useState<ProductApproval[]>(INITIAL_PRODUCT_APPROVALS);
+  const [products, setProducts] = useState<ProductApproval[]>(INITIAL_PRODUCT_APPROVALS);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  useEffect(() => {
+    fetch('http://localhost:8080/api/products')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const apiProducts: ProductApproval[] = data.map((p: any) => ({
+            id: String(p.id),
+            title: p.name || p.title || 'Product',
+            artist: p.artistName || p.artist?.fullName || 'Artist',
+            category: p.productType || p.category || 'CLOTHING',
+            price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
+            imageUrl: Array.isArray(p.imageUrls) && p.imageUrls.length > 0 ? p.imageUrls[0] : '/images/admin_avatar.png',
+            thumbnails: Array.isArray(p.imageUrls) && p.imageUrls.length > 0 ? p.imageUrls : ['/images/admin_avatar.png'],
+            status: p.status === 'APPROVED' ? 'Approved' : p.status === 'REJECTED' ? 'Rejected' : 'Pending',
+            appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-01-01',
+            marketplaceTarget: 'Drop Store',
+            dropLimit: p.stockQuantity || 100,
+            materialDescription: p.description || 'Premium material',
+            sizes: ['S', 'M', 'L', 'XL'],
+            colors: ['#000000', '#FFFFFF'],
+          }));
+          setProducts(apiProducts);
+        }
+      })
+      .catch(() => {
+        // Fallback to initial mock data
+      });
+  }, []);
 
   const filteredProducts = products.filter(p => {
     const matchesSearch =

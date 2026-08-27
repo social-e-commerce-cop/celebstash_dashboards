@@ -27,10 +27,20 @@ export const ProductDetailPage: React.FC = () => {
 
   const handleApprove = () => {
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, status: 'Approved' } : p)));
+    fetch(`http://localhost:8080/api/products/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'APPROVED' }),
+    }).catch(() => {});
   };
 
   const handleReject = () => {
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, status: 'Rejected' } : p)));
+    fetch(`http://localhost:8080/api/products/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'REJECTED' }),
+    }).catch(() => {});
   };
 
   return (
