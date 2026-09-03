@@ -44,8 +44,8 @@ export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange }) =
               className="user-avatar"
             />
             <div className="user-info">
-              <span className="user-name">{user?.fullName || 'Ange Nadette BATETE'}</span>
-              <span className="user-role">{user?.role || 'Admin'}</span>
+              <span className="user-name">{user?.fullName || user?.name || user?.email?.split('@')[0] || 'Admin'}</span>
+              <span className="user-role">{user?.role || 'ADMIN'}</span>
             </div>
             <ChevronDown size={14} className="chevron" />
           </button>

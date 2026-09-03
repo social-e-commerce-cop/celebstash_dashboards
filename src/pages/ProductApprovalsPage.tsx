@@ -3,42 +3,61 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Download, Filter, Calendar, LayoutGrid, List } from 'lucide-react';
 import { INITIAL_PRODUCT_APPROVALS } from '../data/mockAdminData';
 import type { ProductApproval } from '../types';
+import { fetchWithAuth } from '../services/apiClient';
+import { formatImageUrl } from '../utils/imageUrl';
 
 export const ProductApprovalsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<ProductApproval[]>(INITIAL_PRODUCT_APPROVALS);
+  const [products, setProducts] = useState<ProductApproval[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/products')
-      .then((res) => (res.ok ? res.json() : null))
+    fetchWithAuth('/products')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const apiProducts: ProductApproval[] = data.map((p: any) => ({
-            id: String(p.id),
-            title: p.name || p.title || 'Product',
-            artist: p.artistName || p.artist?.fullName || 'Artist',
-            category: p.productType || p.category || 'CLOTHING',
-            price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
-            imageUrl: Array.isArray(p.imageUrls) && p.imageUrls.length > 0 ? p.imageUrls[0] : '/images/admin_avatar.png',
-            thumbnails: Array.isArray(p.imageUrls) && p.imageUrls.length > 0 ? p.imageUrls : ['/images/admin_avatar.png'],
-            status: p.status === 'APPROVED' ? 'Approved' : p.status === 'REJECTED' ? 'Rejected' : 'Pending',
-            appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-01-01',
-            marketplaceTarget: 'Drop Store',
-            dropLimit: p.stockQuantity || 100,
-            materialDescription: p.description || 'Premium material',
-            sizes: ['S', 'M', 'L', 'XL'],
-            colors: ['#000000', '#FFFFFF'],
-          }));
+        if (Array.isArray(data)) {
+          const apiProducts: ProductApproval[] = data.map((p: any) => {
+            const rawImgs: string[] = Array.isArray(p.imageUrls) && p.imageUrls.length > 0
+              ? p.imageUrls
+              : [p.imageUrl || '/images/admin_avatar.png'];
+            const formattedImgs = rawImgs.map((imgUrl) => formatImageUrl(imgUrl));
+
+            return {
+              id: String(p.id),
+              title: p.name || p.title || 'Product',
+              artist: p.sellerName || p.seller?.fullName || p.seller?.username || p.artistName || p.artist?.fullName || p.artist?.username || 'Artist',
+              category: p.productType || p.category || 'CLOTHING',
+              price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
+              imageUrl: formattedImgs[0],
+              thumbnails: formattedImgs,
+              status: p.status === 'APPROVED' ? 'Approved' : p.status === 'REJECTED' ? 'Rejected' : 'Pending',
+              appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-01-01',
+              marketplaceTarget: 'Drop Store',
+              dropLimit: p.stockQuantity || 100,
+              materialDescription: p.description || 'Premium material',
+              sizes: p.sizeStock && Object.keys(p.sizeStock).length > 0 ? Object.keys(p.sizeStock) : (p.sizes || ['S', 'M', 'L', 'XL']),
+              colors: Array.isArray(p.availableColors) && p.availableColors.length > 0 ? p.availableColors : (p.colors || ['Black', 'White']),
+              sizeStock: p.sizeStock || {},
+            };
+          });
           setProducts(apiProducts);
         }
+        setLoading(false);
       })
       .catch(() => {
-        // Fallback to initial mock data
+        setLoading(false);
       });
   }, []);
+
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter]);
 
   const filteredProducts = products.filter(p => {
     const matchesSearch =
@@ -47,6 +66,12 @@ export const ProductApprovalsPage: React.FC = () => {
     const matchesCategory = categoryFilter === 'All' || p.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE) || 1;
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   return (
     <div className="page-container">
@@ -82,10 +107,9 @@ export const ProductApprovalsPage: React.FC = () => {
             <Filter size={14} />
             <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
               <option value="All">Category: All</option>
-              <option value="CLOTHING">Clothing</option>
-              <option value="MUSIC">Music</option>
-              <option value="AUCTION">Auction</option>
-              <option value="MERCH">Merch</option>
+              <option value="Physical Merch">Physical Merch</option>
+              <option value="Audio Tracks">Audio Tracks</option>
+              <option value="Digital Art">Digital Art</option>
             </select>
           </div>
 
@@ -93,7 +117,7 @@ export const ProductApprovalsPage: React.FC = () => {
           <div className="select-wrap">
             <Calendar size={14} />
             <select defaultValue="All Time">
-              <option>Joined: All Time</option>
+              <option>Submitted: All Time</option>
               <option>This Week</option>
               <option>This Month</option>
             </select>
@@ -129,7 +153,7 @@ export const ProductApprovalsPage: React.FC = () => {
           {filteredProducts.length === 0 ? (
             <div className="empty-state">No products found matching filters.</div>
           ) : (
-            filteredProducts.map((prod) => (
+            paginatedProducts.map((prod) => (
               <div
                 key={prod.id}
                 className="product-card"
@@ -156,7 +180,7 @@ export const ProductApprovalsPage: React.FC = () => {
           {filteredProducts.length === 0 ? (
             <div className="empty-state">No products found matching filters.</div>
           ) : (
-            filteredProducts.map((prod) => (
+            paginatedProducts.map((prod) => (
               <div
                 key={prod.id}
                 className="product-list-row"
@@ -171,6 +195,52 @@ export const ProductApprovalsPage: React.FC = () => {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Dynamic Pagination Footer */}
+      {filteredProducts.length > 0 && (
+        <div className="table-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', marginTop: 20, background: '#fff', borderRadius: 12 }}>
+          <div style={{ fontSize: 13, color: '#6b7280' }}>
+            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length} items
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              className="btn-page-nav"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              ← Previous
+            </button>
+            <div className="page-numbers" style={{ display: 'flex', gap: 4 }}>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  className={`page-num ${pageNum === currentPage ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(pageNum)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e5e7eb',
+                    background: pageNum === currentPage ? '#7126D0' : '#fff',
+                    color: pageNum === currentPage ? '#fff' : '#374151',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: pageNum === currentPage ? 600 : 400,
+                  }}
+                >
+                  {pageNum}
+                </button>
+              ))}
+            </div>
+            <button
+              className="btn-page-nav"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next →
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -1,29 +1,110 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Globe, Check, XCircle, ShieldAlert } from 'lucide-react';
 import { INITIAL_ARTIST_APPLICATIONS } from '../data/mockAdminData';
-import type { ApplicationStatus } from '../types';
+import type { ApplicationStatus, ArtistApplication } from '../types';
+import { fetchWithAuth } from '../services/apiClient';
 
 export const ArtistDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [applications, setApplications] = useState(INITIAL_ARTIST_APPLICATIONS);
-  const application = applications.find((a) => a.id === id) || applications[0];
+  const [application, setApplication] = useState<ArtistApplication | null>(null);
 
-  const handleUpdateStatus = (newStatus: ApplicationStatus) => {
-    setApplications((prev) =>
-      prev.map((app) => (app.id === application.id ? { ...app, status: newStatus } : app))
-    );
+  useEffect(() => {
+    fetchWithAuth('/admin/artist-applications')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const found = data.find((app: any) => String(app.id) === id);
+          if (found) {
+            setApplication({
+              id: String(found.id),
+              name: found.userFullName || found.user?.fullName || found.stageName || 'Artist Applicant',
+              username: found.username || found.user?.username || '',
+              title: found.category || found.genre || 'Artist',
+              email: found.userEmail || found.user?.email || 'N/A',
+              socials: found.socialProofLink || found.socialLinks || '@artist',
+              appliedDate: found.createdAt ? new Date(found.createdAt).toISOString().split('T')[0] : '2026-01-01',
+              status: found.status === 'APPROVED' ? 'Approved' : found.status === 'REJECTED' ? 'Rejected' : 'Pending',
+              avatarUrl: found.userProfilePicture || found.user?.profilePicture || '/images/admin_avatar.png',
+              artistStatement: found.bio || 'Applicant bio statement.',
+              externalPortfolios: found.socialProofLink
+                ? found.socialProofLink.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+                : ['instagram.com/artist'],
+            });
+            return;
+          }
+        }
+        const mockFound = INITIAL_ARTIST_APPLICATIONS.find((a) => a.id === id);
+        if (mockFound) setApplication(mockFound);
+      })
+      .catch(() => {
+        const mockFound = INITIAL_ARTIST_APPLICATIONS.find((a) => a.id === id);
+        if (mockFound) setApplication(mockFound);
+      });
+  }, [id]);
 
-    const backendStatus = newStatus === 'Approved' ? 'APPROVED' : newStatus === 'Rejected' ? 'REJECTED' : 'PENDING';
-    fetch(`http://localhost:8080/api/v1/admin/artist-applications/${id}/review`, {
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionError, setRejectionError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleApprove = async () => {
+    if (!application) return;
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetchWithAuth(`/admin/artist-applications/${id}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ approve: true, status: 'APPROVED' }),
+      });
+      if (res.ok) {
+        setApplication((prev) => (prev ? { ...prev, status: 'Approved' } : null));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Failed to approve application: ${errData.message || 'Server error'}`);
+      }
+    } catch (e) {
+      alert('Error connecting to backend server');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmReject = () => {
+    if (!rejectionReason.trim()) {
+      setRejectionError('Rejection reason is mandatory when declining an application.');
+      return;
+    }
+    setRejectionError('');
+    setIsSubmitting(true);
+
+    fetchWithAuth(`/admin/artist-applications/${id}/review`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: backendStatus, reviewNotes: `Updated to ${newStatus}` }),
-    }).catch(() => {
-      // Local state fallback already updated
-    });
+      body: JSON.stringify({
+        approve: false,
+        status: 'REJECTED',
+        rejectionReason: rejectionReason.trim(),
+        reviewNotes: rejectionReason.trim(),
+      }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          setApplication((prev) => (prev ? { ...prev, status: 'Rejected' } : null));
+          setShowRejectModal(false);
+          setRejectionReason('');
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setRejectionError(errData.message || 'Failed to decline application.');
+        }
+      })
+      .catch(() => {
+        setRejectionError('Error connecting to backend server');
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+      });
   };
 
   if (!application) {
@@ -83,7 +164,9 @@ export const ArtistDetailPage: React.FC = () => {
         {/* Username */}
         <div className="detail-section">
           <label className="detail-label">Username</label>
-          <div className="detail-value" style={{ fontSize: 15 }}>@{application.name.toLowerCase().replace(/\s+/g, '_')} ({application.email})</div>
+          <div className="detail-value" style={{ fontSize: 15 }}>
+            {application.username ? `@${application.username}` : `@${application.name.toLowerCase().replace(/\s+/g, '_')}`}
+          </div>
         </div>
 
         {/* Artist Statement */}
@@ -94,21 +177,24 @@ export const ArtistDetailPage: React.FC = () => {
 
         {/* External Portfolios */}
         <div className="detail-section">
-          <label className="detail-label">External Portfolios</label>
-          <div className="portfolio-tags">
-            {application.externalPortfolios.map((handle, idx) => (
-              <a
-                key={idx}
-                href={`https://instagram.com/${handle}`}
-                target="_blank"
-                rel="noreferrer"
-                className="social-tag"
-                style={{ fontSize: 14, padding: '6px 12px', background: '#F8FAFC', borderRadius: 8 }}
-              >
-                <Globe size={16} />
-                <span>_{handle.replace(/^_+/, '')}</span>
-              </a>
-            ))}
+          <label className="detail-label">External Portfolios & Links</label>
+          <div className="portfolio-tags" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {application.externalPortfolios.map((link, idx) => {
+              const href = link.startsWith('http://') || link.startsWith('https://') ? link : `https://${link}`;
+              return (
+                <a
+                  key={idx}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="social-tag"
+                  style={{ fontSize: 13, padding: '8px 14px', background: '#F8FAFC', borderRadius: 8, display: 'inline-flex', alignItems: 'center', width: 'fit-content', wordBreak: 'break-all' }}
+                >
+                  <Globe size={16} />
+                  <span>{link}</span>
+                </a>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -123,11 +209,11 @@ export const ArtistDetailPage: React.FC = () => {
         <div className="modal-actions" style={{ marginTop: 0 }}>
           {application.status === 'Pending' && (
             <>
-              <button className="btn-approve" onClick={() => handleUpdateStatus('Approved')}>
+              <button className="btn-approve" onClick={handleApprove}>
                 <Check size={16} />
                 <span>Approve Artist</span>
               </button>
-              <button className="btn-reject" onClick={() => handleUpdateStatus('Rejected')}>
+              <button className="btn-reject" onClick={() => setShowRejectModal(true)}>
                 <XCircle size={16} />
                 <span>Reject</span>
               </button>
@@ -135,20 +221,75 @@ export const ArtistDetailPage: React.FC = () => {
           )}
 
           {application.status === 'Rejected' && (
-            <button className="btn-approve" onClick={() => handleUpdateStatus('Approved')}>
+            <button className="btn-approve" onClick={handleApprove}>
               <Check size={16} />
               <span>Approve Artist</span>
             </button>
           )}
 
           {application.status === 'Approved' && (
-            <button className="btn-reject" onClick={() => handleUpdateStatus('Blocked')}>
+            <button className="btn-reject" onClick={() => setShowRejectModal(true)}>
               <ShieldAlert size={16} />
               <span>Block Account</span>
             </button>
           )}
         </div>
       </div>
+
+      {/* Rejection Reason Modal */}
+      {showRejectModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="card-box" style={{ width: 460, padding: 24, borderRadius: 16 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              Decline Artist Application
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+              Specify the reason for rejecting <strong>{application.name}</strong>'s application. This explanation will be sent to the applicant via in-app notification and email.
+            </p>
+
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              Rejection Reason <span style={{ color: '#DC2626' }}>*</span>
+            </label>
+            <textarea
+              style={{ width: '100%', height: 100, padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)', fontFamily: 'inherit', fontSize: 13, resize: 'none' }}
+              placeholder="e.g. Follower count threshold not met or invalid social proof provided."
+              value={rejectionReason}
+              onChange={(e) => {
+                setRejectionReason(e.target.value);
+                if (e.target.value.trim()) setRejectionError('');
+              }}
+            />
+
+            {rejectionError && (
+              <div style={{ color: '#DC2626', fontSize: 12, marginTop: 6, fontWeight: 600 }}>
+                {rejectionError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <button
+                className="btn-clear"
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectionError('');
+                  setRejectionReason('');
+                }}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-reject"
+                onClick={handleConfirmReject}
+                disabled={isSubmitting}
+                style={{ padding: '8px 16px' }}
+              >
+                {isSubmitting ? 'Declining...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

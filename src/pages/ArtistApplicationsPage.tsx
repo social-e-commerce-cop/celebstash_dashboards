@@ -1,50 +1,67 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Download, Globe, Eye, Filter, Calendar } from 'lucide-react';
-import { INITIAL_ARTIST_APPLICATIONS } from '../data/mockAdminData';
+import { fetchWithAuth } from '../services/apiClient';
 import type { ArtistApplication } from '../types';
 
 export const ArtistApplicationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [applications, setApplications] = useState<ArtistApplication[]>(INITIAL_ARTIST_APPLICATIONS);
+  const [applications, setApplications] = useState<ArtistApplication[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/v1/admin/artist-applications')
-      .then((res) => (res.ok ? res.json() : null))
+    fetchWithAuth('/admin/artist-applications')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const apiApps: ArtistApplication[] = data.map((app: any) => ({
             id: String(app.id),
-            name: app.user?.fullName || app.stageName || 'Artist Applicant',
-            title: app.genre || 'Artist',
-            email: app.user?.email || 'N/A',
-            socials: app.socialLinks || '@artist',
+            name: app.userFullName || app.user?.fullName || app.stageName || 'Artist Applicant',
+            username: app.username || app.user?.username || '',
+            title: app.category || app.genre || 'Artist',
+            email: app.userEmail || app.user?.email || 'N/A',
+            socials: app.socialProofLink || app.socialLinks || '@artist',
             appliedDate: app.createdAt ? new Date(app.createdAt).toISOString().split('T')[0] : '2026-01-01',
             status: app.status === 'APPROVED' ? 'Approved' : app.status === 'REJECTED' ? 'Rejected' : 'Pending',
-            avatarUrl: app.user?.profilePicture || '/images/admin_avatar.png',
+            avatarUrl: app.userProfilePicture || app.user?.profilePicture || '/images/admin_avatar.png',
             artistStatement: app.bio || 'Applicant bio statement.',
-            externalPortfolios: app.portfolioUrl ? [app.portfolioUrl] : ['instagram.com/artist'],
+            externalPortfolios: app.socialProofLink ? app.socialProofLink.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean) : ['instagram.com/artist'],
           }));
           setApplications(apiApps);
         }
+        setLoading(false);
       })
       .catch(() => {
-        // Fallback to initial mock data
+        setLoading(false);
       });
   }, []);
+
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   const filteredApps = applications.filter(app => {
     const matchesSearch =
       app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (app.username && app.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
       app.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.socials.toLowerCase().includes(searchQuery.toLowerCase());
+      app.title.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filteredApps.length / ITEMS_PER_PAGE) || 1;
+  const paginatedApps = filteredApps.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   return (
     <div className="page-container">
@@ -63,7 +80,7 @@ export const ArtistApplicationsPage: React.FC = () => {
       {/* Filter Row */}
       <div className="table-filter-card">
         <div className="filter-left">
-          <div className="filter-search">
+          <div className="filter-search" style={{ width: 320 }}>
             <Search size={16} className="search-icon" />
             <input
               type="text"
@@ -75,22 +92,22 @@ export const ArtistApplicationsPage: React.FC = () => {
         </div>
 
         <div className="filter-right">
-          {/* Status Dropdown */}
           <div className="select-wrap">
             <Filter size={14} />
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
               <option value="All">Status: All</option>
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
               <option value="Rejected">Rejected</option>
-              <option value="Blocked">Blocked</option>
             </select>
           </div>
 
-          {/* Date Filter */}
           <div className="select-wrap">
             <Calendar size={14} />
-            <select defaultValue="All Time">
+            <select>
               <option>Joined: All Time</option>
               <option>This Week</option>
               <option>This Month</option>
@@ -104,13 +121,13 @@ export const ArtistApplicationsPage: React.FC = () => {
       </div>
 
       {/* Applications Table */}
-      <div className="table-wrapper">
+      <div className="table-card">
         <table className="data-table">
           <thead>
             <tr>
               <th style={{ width: 40 }}><input type="checkbox" /></th>
               <th>Names</th>
-              <th>Email Address</th>
+              <th>Username</th>
               <th>Socials</th>
               <th>Applied Date</th>
               <th>Status</th>
@@ -118,12 +135,20 @@ export const ArtistApplicationsPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredApps.length === 0 ? (
+            {loading ? (
               <tr>
-                <td colSpan={7} className="empty-table">No applications found matching criteria.</td>
+                <td colSpan={7} className="empty-table" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                  Loading artist applications from database...
+                </td>
+              </tr>
+            ) : filteredApps.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="empty-table" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                  No artist applications found in database.
+                </td>
               </tr>
             ) : (
-              filteredApps.map((app) => (
+              paginatedApps.map((app) => (
                 <tr key={app.id}>
                   <td><input type="checkbox" /></td>
                   <td>
@@ -135,12 +160,18 @@ export const ArtistApplicationsPage: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="cell-text">{app.email}</td>
+                  <td className="cell-text">
+                    {app.username ? `@${app.username}` : `@${app.name.toLowerCase().replace(/\s+/g, '_')}`}
+                  </td>
                   <td>
-                    <div className="social-pill">
-                      <Globe size={14} />
-                      <span>_{app.socials.replace(/^_+/, '')}</span>
-                    </div>
+                    <button
+                      className="portfolio-link-btn"
+                      onClick={() => navigate(`/artist-applications/${app.id}`)}
+                      title={app.socials}
+                    >
+                      <Globe size={13} />
+                      <span>View Portfolio</span>
+                    </button>
                   </td>
                   <td className="cell-text">{app.appliedDate}</td>
                   <td>
@@ -160,20 +191,51 @@ export const ArtistApplicationsPage: React.FC = () => {
           </tbody>
         </table>
 
-        {/* Pagination Footer */}
-        <div className="table-pagination">
-          <button className="btn-page-nav" disabled>← Previous</button>
-          <div className="page-numbers">
-            <span className="page-num active">1</span>
-            <span className="page-num">2</span>
-            <span className="page-num">3</span>
-            <span className="page-num">...</span>
-            <span className="page-num">8</span>
-            <span className="page-num">9</span>
-            <span className="page-num">10</span>
+        {/* Dynamic Pagination Footer */}
+        {filteredApps.length > 0 && (
+          <div className="table-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
+            <div style={{ fontSize: 13, color: '#6b7280' }}>
+              Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredApps.length)} of {filteredApps.length} applications
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                className="btn-page-nav"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                ← Previous
+              </button>
+              <div className="page-numbers" style={{ display: 'flex', gap: 4 }}>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    className={`page-num ${pageNum === currentPage ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #e5e7eb',
+                      background: pageNum === currentPage ? '#7126D0' : '#fff',
+                      color: pageNum === currentPage ? '#fff' : '#374151',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: pageNum === currentPage ? 600 : 400,
+                    }}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+              </div>
+              <button
+                className="btn-page-nav"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next →
+              </button>
+            </div>
           </div>
-          <button className="btn-page-nav">Next →</button>
-        </div>
+        )}
       </div>
     </div>
   );

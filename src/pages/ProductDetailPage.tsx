@@ -1,47 +1,115 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, XCircle } from 'lucide-react';
 import { INITIAL_PRODUCT_APPROVALS } from '../data/mockAdminData';
+import { fetchWithAuth } from '../services/apiClient';
+import { formatImageUrl } from '../utils/imageUrl';
+import type { ProductApproval } from '../types';
 
 export const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [products, setProducts] = useState(INITIAL_PRODUCT_APPROVALS);
-  const product = products.find((p) => p.id === id) || products[0];
+  const [product, setProduct] = useState<ProductApproval | null>(null);
+  const [selectedImg, setSelectedImg] = useState<string>('');
+  const [selectedSize, setSelectedSize] = useState<string>('');
 
-  const [selectedImg, setSelectedImg] = useState(product?.imageUrl);
-  const [selectedSize, setSelectedSize] = useState(product?.sizes?.[1] || product?.sizes?.[0]);
+  useEffect(() => {
+    fetchWithAuth(`/products/${id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((p) => {
+        if (p) {
+          const rawImgs: string[] = Array.isArray(p.imageUrls) && p.imageUrls.length > 0
+            ? p.imageUrls
+            : [p.imageUrl || '/images/admin_avatar.png'];
+          const formattedImgs = rawImgs.map((imgUrl) => formatImageUrl(imgUrl));
 
-  if (!product) {
-    return (
-      <div className="page-container">
-        <button className="btn-clear flex-align" onClick={() => navigate('/product-approvals')}>
-          <ArrowLeft size={16} />
-          <span>Back to Product Approvals</span>
-        </button>
-        <div className="empty-state">Product submission not found.</div>
-      </div>
-    );
-  }
+          const apiProduct: ProductApproval = {
+            id: String(p.id),
+            title: p.name || p.title || 'Product',
+            artist: p.sellerName || p.seller?.fullName || p.seller?.username || p.artistName || p.artist?.fullName || p.artist?.username || 'Artist',
+            category: p.productType || p.category || 'CLOTHING',
+            price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
+            imageUrl: formattedImgs[0],
+            thumbnails: formattedImgs,
+            status: p.status === 'APPROVED' ? 'Approved' : p.status === 'REJECTED' ? 'Rejected' : 'Pending',
+            appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-01-01',
+            marketplaceTarget: 'Drop Store',
+            dropLimit: p.stockQuantity || 100,
+            materialDescription: p.description || 'Premium material',
+            sizes: p.sizeStock && Object.keys(p.sizeStock).length > 0 ? Object.keys(p.sizeStock) : (p.sizes || ['S', 'M', 'L', 'XL']),
+            colors: Array.isArray(p.availableColors) && p.availableColors.length > 0 ? p.availableColors : (p.colors || ['Black', 'White']),
+            sizeStock: p.sizeStock || {},
+          };
+          setProduct(apiProduct);
+          setSelectedImg(apiProduct.imageUrl);
+        } else {
+          const found = INITIAL_PRODUCT_APPROVALS.find((item) => item.id === id);
+          if (found) {
+            setProduct(found);
+            setSelectedImg(found.imageUrl);
+          }
+        }
+      })
+      .catch(() => {
+        const found = INITIAL_PRODUCT_APPROVALS.find((item) => item.id === id);
+        if (found) {
+          setProduct(found);
+          setSelectedImg(found.imageUrl);
+        }
+      });
+  }, [id]);
+
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectError, setRejectError] = useState('');
 
   const handleApprove = () => {
-    setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, status: 'Approved' } : p)));
-    fetch(`http://localhost:8080/api/products/${id}/status`, {
+    if (!product) return;
+    setProduct((prev) => (prev ? { ...prev, status: 'Approved' } : null));
+    fetchWithAuth(`/products/${id}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'APPROVED' }),
     }).catch(() => {});
   };
 
-  const handleReject = () => {
-    setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, status: 'Rejected' } : p)));
-    fetch(`http://localhost:8080/api/products/${id}/status`, {
+  const handleRejectClick = () => {
+    setRejectError('');
+    setShowRejectModal(true);
+  };
+
+  const confirmReject = () => {
+    if (!rejectionReason.trim()) {
+      setRejectError('Rejection reason is mandatory before rejecting a product submission.');
+      return;
+    }
+    setRejectError('');
+    setShowRejectModal(false);
+    setProduct((prev) => (prev ? { ...prev, status: 'Rejected' } : null));
+
+    fetchWithAuth(`/products/${id}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'REJECTED' }),
+      body: JSON.stringify({ status: 'REJECTED', rejectionReason: rejectionReason.trim() }),
     }).catch(() => {});
   };
+
+  if (!product) {
+    return (
+      <div className="page-container" style={{ maxWidth: 960 }}>
+        <button
+          className="btn-clear flex-align"
+          style={{ gap: 6, padding: 0, marginBottom: 16, color: 'var(--text-muted)' }}
+          onClick={() => navigate('/product-approvals')}
+        >
+          <ArrowLeft size={16} />
+          <span>Back to Product Approvals</span>
+        </button>
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          Loading product details...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container" style={{ maxWidth: 960 }}>
@@ -60,8 +128,8 @@ export const ProductDetailPage: React.FC = () => {
           <p className="page-subtitle">Inspect product imagery, drop limits, materials, and validate release.</p>
         </div>
 
-        <span className={`status-badge status-${product.status.toLowerCase()}`} style={{ fontSize: 13, padding: '6px 16px' }}>
-          {product.status}
+        <span className={`status-badge status-${(product?.status || 'Pending').toLowerCase()}`} style={{ fontSize: 13, padding: '6px 16px' }}>
+          {product?.status || 'Pending'}
         </span>
       </div>
 
@@ -113,20 +181,47 @@ export const ProductDetailPage: React.FC = () => {
               <p className="detail-statement">"{product.materialDescription}"</p>
             </div>
 
-            {/* Sizes */}
+            {/* Sizes & Items per Size */}
             {product.sizes && product.sizes.length > 0 && (
               <div className="detail-section">
-                <label className="detail-label">Sizes</label>
-                <div className="size-pills">
-                  {product.sizes.map((sz) => (
-                    <button
-                      key={sz}
-                      className={`size-btn ${selectedSize === sz ? 'active' : ''}`}
-                      onClick={() => setSelectedSize(sz)}
-                    >
-                      {sz}
-                    </button>
-                  ))}
+                <label className="detail-label">Submitted Size & Quantity Breakdown</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                  {product.sizes.map((sz) => {
+                    const qty = product.sizeStock ? product.sizeStock[sz] : undefined;
+                    return (
+                      <div
+                        key={sz}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: 10,
+                          border: '1px solid #E5E7EB',
+                          background: selectedSize === sz ? '#7126D0' : '#FFFFFF',
+                          color: selectedSize === sz ? '#FFFFFF' : '#111827',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: 13,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        }}
+                        onClick={() => setSelectedSize(sz)}
+                      >
+                        <span style={{ fontWeight: 700 }}>Size {sz}</span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            padding: '3px 8px',
+                            borderRadius: 12,
+                            background: selectedSize === sz ? 'rgba(255,255,255,0.25)' : '#EEF2FF',
+                            color: selectedSize === sz ? '#FFFFFF' : '#4F46E5',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {qty !== undefined ? `${qty} items` : '0 items'}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -134,35 +229,226 @@ export const ProductDetailPage: React.FC = () => {
             {/* Colors */}
             {product.colors && product.colors.length > 0 && (
               <div className="detail-section">
-                <label className="detail-label">Colors</label>
-                <div className="color-swatches">
-                  {product.colors.map((c, idx) => (
-                    <span
-                      key={idx}
-                      className="color-swatch"
-                      style={{ backgroundColor: c }}
-                      title={c}
-                    ></span>
-                  ))}
+                <label className="detail-label">Available Colors</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {product.colors.map((c, idx) => {
+                    const COLOR_NAME_MAP: Record<string, string> = {
+                      '#000000': 'Black',
+                      '#FFFFFF': 'White',
+                      '#FF0000': 'Red',
+                      '#0000FF': 'Blue',
+                      '#008000': 'Green',
+                      '#800080': 'Purple',
+                      '#FFD700': 'Gold',
+                      '#C0C0C0': 'Silver',
+                      '#FFC0CB': 'Pink',
+                      'BLACK': 'Black',
+                      'WHITE': 'White',
+                      'RED': 'Red',
+                      'BLUE': 'Blue',
+                      'GREEN': 'Green',
+                      'PURPLE': 'Purple',
+                      'GOLD': 'Gold',
+                      'SILVER': 'Silver',
+                      'PINK': 'Pink',
+                    };
+                    const upper = (c || '').toUpperCase();
+                    const colorName = COLOR_NAME_MAP[upper] || c;
+                    const colorHex = upper.startsWith('#')
+                      ? upper
+                      : upper === 'BLACK' ? '#000000'
+                      : upper === 'WHITE' ? '#FFFFFF'
+                      : upper === 'RED' ? '#EF4444'
+                      : upper === 'BLUE' ? '#3B82F6'
+                      : upper === 'GREEN' ? '#10B981'
+                      : upper === 'PURPLE' ? '#8B5CF6'
+                      : upper === 'GOLD' ? '#F59E0B'
+                      : upper === 'SILVER' ? '#9CA3AF'
+                      : upper === 'PINK' ? '#EC4899'
+                      : '#6B7280';
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 20,
+                          border: '1px solid #E5E7EB',
+                          background: '#FFFFFF',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: '#111827',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: '50%',
+                            backgroundColor: colorHex,
+                            border: colorHex.toLowerCase() === '#ffffff' ? '1px solid #D1D5DB' : 'none',
+                            display: 'inline-block',
+                          }}
+                        />
+                        <span>{colorName}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons / Status Banner */}
           <div className="modal-actions" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
-            <button className="btn-approve" onClick={handleApprove}>
-              <Check size={16} />
-              <span>Approve Release</span>
-            </button>
+            {product.status === 'Approved' || product.status === 'APPROVED' ? (
+              <div style={{
+                width: '100%',
+                padding: '12px 20px',
+                borderRadius: 10,
+                backgroundColor: '#ECFDF5',
+                border: '1px solid #10B981',
+                color: '#065F46',
+                fontWeight: 700,
+                fontSize: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}>
+                <Check size={18} color="#10B981" />
+                <span>Product Approved & Published to Shop</span>
+              </div>
+            ) : product.status === 'Rejected' || product.status === 'REJECTED' ? (
+              <div style={{
+                width: '100%',
+                padding: '12px 20px',
+                borderRadius: 10,
+                backgroundColor: '#FEF2F2',
+                border: '1px solid #EF4444',
+                color: '#991B1B',
+                fontWeight: 700,
+                fontSize: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}>
+                <XCircle size={18} color="#EF4444" />
+                <span>Product Submission Rejected</span>
+              </div>
+            ) : (
+              <>
+                <button className="btn-approve" onClick={handleApprove}>
+                  <Check size={16} />
+                  <span>Approve Release</span>
+                </button>
 
-            <button className="btn-reject" onClick={handleReject}>
-              <XCircle size={16} />
-              <span>Reject Drop</span>
-            </button>
+                <button className="btn-reject" onClick={handleRejectClick}>
+                  <XCircle size={16} />
+                  <span>Reject Drop</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Mandatory Rejection Reason Modal */}
+      {showRejectModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: 20,
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 500,
+            padding: 24,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 6 }}>
+              Reject Product Submission
+            </h3>
+            <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
+              Please state the exact reason for rejecting <strong>"{product.title}"</strong>. This note will be sent directly to the creator.
+            </p>
+
+            <textarea
+              rows={4}
+              placeholder="e.g. Image resolution is too low, missing explicit size breakdown details..."
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              style={{
+                width: '100%',
+                padding: 12,
+                borderRadius: 10,
+                border: '1px solid #D1D5DB',
+                fontSize: 14,
+                color: '#111827',
+                outline: 'none',
+                resize: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+
+            {rejectError && (
+              <p style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>
+                ⚠️ {rejectError}
+              </p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <button
+                type="button"
+                onClick={() => setShowRejectModal(false)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: 8,
+                  border: '1px solid #D1D5DB',
+                  backgroundColor: '#FFFFFF',
+                  color: '#374151',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmReject}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: 8,
+                  border: 'none',
+                  backgroundColor: '#DC2626',
+                  color: '#FFFFFF',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

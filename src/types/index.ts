@@ -4,15 +4,18 @@ export type ApplicationStatus = 'Pending' | 'Approved' | 'Rejected' | 'Blocked';
 
 export interface AdminUser {
   id: string;
-  fullName: string;
+  fullName?: string;
+  name?: string;
   email: string;
-  role: UserRole;
+  role: string;
   avatarUrl: string;
+  token?: string;
 }
 
 export interface ArtistApplication {
   id: string;
   name: string;
+  username?: string;
   title: string;
   email: string;
   socials: string;
@@ -40,11 +43,13 @@ export interface ProductApproval {
   materialDescription: string;
   sizes: string[];
   colors: string[];
+  sizeStock?: Record<string, number>;
 }
 
 export interface UserDirectoryItem {
   id: string;
   name: string;
+  username?: string;
   email: string;
   role: UserRole;
   joinedDate: string;

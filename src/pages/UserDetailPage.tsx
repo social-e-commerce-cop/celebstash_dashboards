@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Globe, ThumbsUp, Share2, Mail, Calendar, Shield } from 'lucide-react';
 import { INITIAL_USERS_DIRECTORY } from '../data/mockAdminData';
 import type { UserDirectoryItem } from '../types';
+import { fetchWithAuth } from '../services/apiClient';
 
 export const UserDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -12,23 +13,26 @@ export const UserDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'Feed' | 'Stashes' | 'Music' | 'Events' | 'Auction'>('Feed');
 
   useEffect(() => {
-    // Attempt fetching real user from Spring Boot API or fallback to mock
-    fetch(`http://localhost:8080/api/v1/users/${id}`)
+    fetchWithAuth(`/users/${id}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        const foundMock = INITIAL_USERS_DIRECTORY.find((u) => u.id === id);
         if (data) {
           setUser({
-            id: String(data.id),
-            name: data.fullName || data.username || 'User',
-            email: data.email || 'N/A',
-            role: data.role || 'USER',
-            joinedDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : '2026-01-01',
-            status: data.status || 'Active',
-            avatarUrl: data.profilePicture || '/images/admin_avatar.png',
-            artistStatement: data.bio || '',
+            id: String(data.id || id),
+            name: data.fullName || data.name || data.username || (foundMock ? foundMock.name : 'User'),
+            username: data.username || (foundMock ? foundMock.username : ''),
+            email: data.email || (foundMock ? foundMock.email : 'N/A'),
+            role: (data.role || (foundMock ? foundMock.role : 'USER')) as any,
+            joinedDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : (foundMock ? foundMock.joinedDate : '2026-01-01'),
+            status: (data.status || (foundMock ? foundMock.status : 'Active')) as any,
+            avatarUrl: data.profilePicture || (foundMock ? foundMock.avatarUrl : '/images/admin_avatar.png'),
+            artistStatement: data.bio || (foundMock ? foundMock.artistStatement : ''),
+            posts: foundMock ? foundMock.posts : [],
+            socials: foundMock ? foundMock.socials : undefined,
           });
         } else {
-          const found = INITIAL_USERS_DIRECTORY.find((u) => u.id === id) || INITIAL_USERS_DIRECTORY[0];
+          const found = foundMock || INITIAL_USERS_DIRECTORY[0];
           setUser(found);
         }
       })
@@ -50,6 +54,10 @@ export const UserDetailPage: React.FC = () => {
     );
   }
 
+  const userStatus = String(user.status || 'Active');
+  const userRole = String(user.role || 'USER');
+  const userName = user.name || 'User';
+
   return (
     <div className="page-container" style={{ maxWidth: 960 }}>
       {/* Header */}
@@ -67,8 +75,8 @@ export const UserDetailPage: React.FC = () => {
           <p className="page-subtitle">Inspect user metadata, role permissions, activity history, and creative feeds.</p>
         </div>
 
-        <span className={`status-badge status-${user.status.toLowerCase()}`} style={{ fontSize: 13, padding: '6px 16px' }}>
-          {user.status}
+        <span className={`status-badge status-${userStatus.toLowerCase()}`} style={{ fontSize: 13, padding: '6px 16px' }}>
+          {userStatus}
         </span>
       </div>
 
@@ -76,21 +84,30 @@ export const UserDetailPage: React.FC = () => {
         {/* Left Side: Profile Sidebar */}
         <div className="card-box" style={{ height: 'fit-content' }}>
           <div className="profile-detail-header" style={{ flexDirection: 'column', textAlign: 'center' }}>
-            <img src={user.avatarUrl} alt={user.name} className="profile-detail-avatar" style={{ width: 80, height: 80 }} />
+            <img src={user.avatarUrl || '/images/admin_avatar.png'} alt={userName} className="profile-detail-avatar" style={{ width: 80, height: 80 }} />
             <div className="profile-detail-meta" style={{ alignItems: 'center' }}>
-              <h2 className="profile-detail-name" style={{ fontSize: 20 }}>{user.name}</h2>
-              <span className={`role-pill role-${user.role.toLowerCase()}`} style={{ marginTop: 6, fontSize: 12, padding: '4px 10px' }}>
-                {user.role}
+              <h2 className="profile-detail-name" style={{ fontSize: 20 }}>{userName}</h2>
+              <span className={`role-pill role-${userRole.toLowerCase()}`} style={{ marginTop: 6, fontSize: 12, padding: '4px 10px' }}>
+                {userRole}
               </span>
             </div>
           </div>
 
           <div className="detail-section">
             <label className="detail-label flex-align" style={{ gap: 4 }}>
-              <Mail size={12} />
               <span>Username</span>
             </label>
-            <div className="detail-value">@{user.name.toLowerCase().replace(/\s+/g, '_')} ({user.email})</div>
+            <div className="detail-value" style={{ color: '#6366f1', fontWeight: 600 }}>
+              {user.username ? (user.username.startsWith('@') ? user.username : `@${user.username}`) : `@${userName.toLowerCase().replace(/\s+/g, '_')}`}
+            </div>
+          </div>
+
+          <div className="detail-section">
+            <label className="detail-label flex-align" style={{ gap: 4 }}>
+              <Mail size={12} />
+              <span>Email Address</span>
+            </label>
+            <div className="detail-value">{user.email || 'N/A'}</div>
           </div>
 
           <div className="detail-section">
@@ -98,7 +115,7 @@ export const UserDetailPage: React.FC = () => {
               <Calendar size={12} />
               <span>Joined Date</span>
             </label>
-            <div className="detail-value">{user.joinedDate}</div>
+            <div className="detail-value">{user.joinedDate || '2026-01-01'}</div>
           </div>
 
           {user.artistStatement && (
@@ -108,12 +125,30 @@ export const UserDetailPage: React.FC = () => {
             </div>
           )}
 
-          {user.socials && (
+          {user.socials && typeof user.socials === 'string' && (
             <div className="detail-section">
               <label className="detail-label">Portfolios & Links</label>
-              <div className="social-pill">
-                <Globe size={14} />
-                <span>_{user.socials.replace(/^_+/, '')}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {user.socials
+                  .split(/,|\n/)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .map((link, idx) => {
+                    const href = link.startsWith('http://') || link.startsWith('https://') ? link : `https://${link}`;
+                    return (
+                      <a
+                        key={idx}
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="social-tag"
+                        style={{ fontSize: 13, padding: '6px 12px', background: '#F8FAFC', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6, wordBreak: 'break-all' }}
+                      >
+                        <Globe size={14} />
+                        <span>{link}</span>
+                      </a>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -122,7 +157,7 @@ export const UserDetailPage: React.FC = () => {
             <button
               className="btn-reject"
               style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => alert(`Account status updated for ${user.name}`)}
+              onClick={() => alert(`Account status updated for ${userName}`)}
             >
               <Shield size={16} />
               <span>Toggle Account Lock</span>
@@ -149,7 +184,7 @@ export const UserDetailPage: React.FC = () => {
               user.posts.map((post) => (
                 <div key={post.id} className="feed-post-card">
                   <div className="post-header">
-                    <img src={user.avatarUrl} alt={post.artistName} className="post-avatar" />
+                    <img src={user.avatarUrl || '/images/admin_avatar.png'} alt={post.artistName} className="post-avatar" />
                     <div>
                       <strong className="post-artist-name">{post.artistName}</strong>
                       <span className="post-type-badge">{post.type}</span>

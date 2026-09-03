@@ -39,10 +39,12 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({
           </button>
         </div>
 
-        {/* Primary Email */}
+        {/* Username */}
         <div className="detail-section">
-          <label className="detail-label">Primary Email</label>
-          <div className="detail-value">{application.email}</div>
+          <label className="detail-label">Username</label>
+          <div className="detail-value">
+            {application.username ? `@${application.username}` : `@${application.name.toLowerCase().replace(/\s+/g, '_')}`}
+          </div>
         </div>
 
         {/* Artist Statement */}
