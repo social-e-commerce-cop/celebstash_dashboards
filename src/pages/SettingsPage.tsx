@@ -1,17 +1,58 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Save, Shield, Bell, User } from 'lucide-react';
+import { fetchWithAuth } from '../services/apiClient';
 
 export const SettingsPage: React.FC = () => {
   const { user } = useAuth();
-  const [fullName, setFullName] = useState(user?.fullName || 'Ange Nadette BATETE');
-  const [email, setEmail] = useState(user?.email || 'admin@zikii.com');
+  const [fullName, setFullName] = useState(user?.fullName || 'Emmy Gretta');
+  const [email, setEmail] = useState(user?.email || 'karabogretta@gmail.com');
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [autoApprove, setAutoApprove] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Settings saved successfully!');
+    setIsSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const res = await fetchWithAuth('/users/me', {
+        method: 'PUT',
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          username: user?.email?.split('@')[0] || 'admin',
+        }),
+      });
+
+      if (res.ok) {
+        setSaveMessage('Settings saved successfully!');
+        setTimeout(() => setSaveMessage(null), 3000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSaveMessage(`Failed to save: ${err.message || 'Server error'}`);
+      }
+    } catch (e) {
+      setSaveMessage('Error connecting to backend server.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      const res = await fetchWithAuth(`/auth/password-reset/initiate?identifier=${encodeURIComponent(email.trim())}`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        alert('Password reset instructions have been sent to your email!');
+      } else {
+        alert('Could not initiate password reset. Please try again.');
+      }
+    } catch (e) {
+      alert('Error connecting to backend server.');
+    }
   };
 
   return (
@@ -21,11 +62,27 @@ export const SettingsPage: React.FC = () => {
           <h1 className="page-title">Admin Settings</h1>
           <p className="page-subtitle">Configure system preferences, admin credentials, and notification triggers.</p>
         </div>
-        <button className="btn-primary" onClick={handleSave}>
+        <button className="btn-primary" onClick={handleSave} disabled={isSaving}>
           <Save size={16} />
-          <span>Save Changes</span>
+          <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
         </button>
       </div>
+
+      {saveMessage && (
+        <div
+          style={{
+            backgroundColor: saveMessage.includes('Failed') || saveMessage.includes('Error') ? '#FEE2E2' : '#DCFCE7',
+            color: saveMessage.includes('Failed') || saveMessage.includes('Error') ? '#DC2626' : '#15803D',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            border: '1px solid currentColor',
+          }}
+        >
+          {saveMessage}
+        </div>
+      )}
 
       <div className="card-box" style={{ marginBottom: 20 }}>
         <h3 className="card-title flex-align" style={{ gap: 8, marginBottom: 16 }}>
@@ -93,7 +150,7 @@ export const SettingsPage: React.FC = () => {
           <span>Security</span>
         </h3>
         <p className="card-sub" style={{ marginBottom: 16 }}>Two-Factor Authentication is currently active for this admin account.</p>
-        <button className="btn-secondary" onClick={() => alert('Password reset email sent!')}>
+        <button className="btn-secondary" onClick={handleResetPassword}>
           Reset Password
         </button>
       </div>

@@ -63,14 +63,27 @@ export const ProductDetailPage: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectError, setRejectError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!product) return;
-    setProduct((prev) => (prev ? { ...prev, status: 'Approved' } : null));
-    fetchWithAuth(`/products/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'APPROVED' }),
-    }).catch(() => {});
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/products/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'APPROVED' }),
+      });
+      if (res.ok) {
+        setProduct((prev) => (prev ? { ...prev, status: 'Approved' } : null));
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Failed to approve product: ${err.message || 'Server error'}`);
+      }
+    } catch (e) {
+      alert('Error connecting to backend server');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleRejectClick = () => {
@@ -78,19 +91,31 @@ export const ProductDetailPage: React.FC = () => {
     setShowRejectModal(true);
   };
 
-  const confirmReject = () => {
+  const confirmReject = async () => {
     if (!rejectionReason.trim()) {
       setRejectError('Rejection reason is mandatory before rejecting a product submission.');
       return;
     }
     setRejectError('');
-    setShowRejectModal(false);
-    setProduct((prev) => (prev ? { ...prev, status: 'Rejected' } : null));
+    setIsSubmitting(true);
 
-    fetchWithAuth(`/products/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'REJECTED', rejectionReason: rejectionReason.trim() }),
-    }).catch(() => {});
+    try {
+      const res = await fetchWithAuth(`/products/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'REJECTED', rejectionReason: rejectionReason.trim() }),
+      });
+      if (res.ok) {
+        setShowRejectModal(false);
+        setProduct((prev) => (prev ? { ...prev, status: 'Rejected' } : null));
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setRejectError(err.message || 'Failed to reject product.');
+      }
+    } catch (e) {
+      setRejectError('Error connecting to backend server.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!product) {
@@ -305,7 +330,7 @@ export const ProductDetailPage: React.FC = () => {
 
           {/* Action Buttons / Status Banner */}
           <div className="modal-actions" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
-            {product.status === 'Approved' || product.status === 'APPROVED' ? (
+            {product.status === 'Approved' || (product.status as string) === 'APPROVED' ? (
               <div style={{
                 width: '100%',
                 padding: '12px 20px',
@@ -323,7 +348,7 @@ export const ProductDetailPage: React.FC = () => {
                 <Check size={18} color="#10B981" />
                 <span>Product Approved & Published to Shop</span>
               </div>
-            ) : product.status === 'Rejected' || product.status === 'REJECTED' ? (
+            ) : product.status === 'Rejected' || (product.status as string) === 'REJECTED' ? (
               <div style={{
                 width: '100%',
                 padding: '12px 20px',
@@ -343,12 +368,12 @@ export const ProductDetailPage: React.FC = () => {
               </div>
             ) : (
               <>
-                <button className="btn-approve" onClick={handleApprove}>
+                <button className="btn-approve" onClick={handleApprove} disabled={isSubmitting}>
                   <Check size={16} />
-                  <span>Approve Release</span>
+                  <span>{isSubmitting ? 'Approving...' : 'Approve Release'}</span>
                 </button>
 
-                <button className="btn-reject" onClick={handleRejectClick}>
+                <button className="btn-reject" onClick={handleRejectClick} disabled={isSubmitting}>
                   <XCircle size={16} />
                   <span>Reject Drop</span>
                 </button>
@@ -432,6 +457,7 @@ export const ProductDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={confirmReject}
+                disabled={isSubmitting}
                 style={{
                   padding: '10px 18px',
                   borderRadius: 8,
@@ -440,10 +466,11 @@ export const ProductDetailPage: React.FC = () => {
                   color: '#FFFFFF',
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: 'pointer',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  opacity: isSubmitting ? 0.7 : 1,
                 }}
               >
-                Confirm Rejection
+                {isSubmitting ? 'Declining...' : 'Confirm Rejection'}
               </button>
             </div>
           </div>

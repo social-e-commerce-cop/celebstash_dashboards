@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Download, Eye, Lock } from 'lucide-react';
-import { INITIAL_USERS_DIRECTORY } from '../data/mockAdminData';
 import type { UserDirectoryItem } from '../types';
 import { fetchWithAuth } from '../services/apiClient';
+import { formatImageUrl } from '../utils/imageUrl';
 
 export const UsersPage: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserDirectoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
+  const loadUsers = () => {
+    setLoading(true);
+    setError(null);
     fetchWithAuth('/users')
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (Array.isArray(data)) {
           const apiUsers: UserDirectoryItem[] = data.map((u: any) => ({
@@ -24,16 +30,22 @@ export const UsersPage: React.FC = () => {
             role: u.role || 'USER',
             joinedDate: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '2026-01-01',
             status: u.status === 'ACTIVE' ? 'Active' : u.status === 'BLOCKED' ? 'Blocked' : 'Active',
-            avatarUrl: u.profilePicture || '/images/admin_avatar.png',
+            avatarUrl: formatImageUrl(u.profilePicture),
             artistStatement: u.bio || '',
           }));
           setUsers(apiUsers);
         }
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn('Could not load live users:', err);
+        setError('Could not connect to users service. Backend may be waking up.');
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadUsers();
   }, []);
 
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -69,6 +81,40 @@ export const UsersPage: React.FC = () => {
           <span>Export</span>
         </button>
       </div>
+
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#FEF3C7',
+            color: '#92400E',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            border: '1px solid #FCD34D',
+          }}
+        >
+          <span>⚠️ {error}</span>
+          <button
+            onClick={loadUsers}
+            style={{
+              background: '#D97706',
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '4px 12px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '12px',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Stats Cards Row */}
       <div className="stats-grid four-col" style={{ marginBottom: 20 }}>

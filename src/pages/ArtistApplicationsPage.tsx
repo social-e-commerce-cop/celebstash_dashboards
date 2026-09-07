@@ -2,18 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Download, Globe, Eye, Filter, Calendar } from 'lucide-react';
 import { fetchWithAuth } from '../services/apiClient';
+import { formatImageUrl } from '../utils/imageUrl';
 import type { ArtistApplication } from '../types';
 
 export const ArtistApplicationsPage: React.FC = () => {
   const navigate = useNavigate();
   const [applications, setApplications] = useState<ArtistApplication[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
 
-  useEffect(() => {
+  const loadApplications = () => {
+    setLoading(true);
+    setError(null);
     fetchWithAuth('/admin/artist-applications')
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (Array.isArray(data)) {
           const apiApps: ArtistApplication[] = data.map((app: any) => ({
@@ -25,7 +32,7 @@ export const ArtistApplicationsPage: React.FC = () => {
             socials: app.socialProofLink || app.socialLinks || '@artist',
             appliedDate: app.createdAt ? new Date(app.createdAt).toISOString().split('T')[0] : '2026-01-01',
             status: app.status === 'APPROVED' ? 'Approved' : app.status === 'REJECTED' ? 'Rejected' : 'Pending',
-            avatarUrl: app.userProfilePicture || app.user?.profilePicture || '/images/admin_avatar.png',
+            avatarUrl: formatImageUrl(app.userProfilePicture || app.user?.profilePicture),
             artistStatement: app.bio || 'Applicant bio statement.',
             externalPortfolios: app.socialProofLink ? app.socialProofLink.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean) : ['instagram.com/artist'],
           }));
@@ -33,9 +40,15 @@ export const ArtistApplicationsPage: React.FC = () => {
         }
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn('Could not load artist applications:', err);
+        setError('Could not connect to artist applications service. Backend may be waking up.');
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadApplications();
   }, []);
 
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -76,6 +89,40 @@ export const ArtistApplicationsPage: React.FC = () => {
           <span>Export</span>
         </button>
       </div>
+
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#FEF3C7',
+            color: '#92400E',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            border: '1px solid #FCD34D',
+          }}
+        >
+          <span>⚠️ {error}</span>
+          <button
+            onClick={loadApplications}
+            style={{
+              background: '#D97706',
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '4px 12px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '12px',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Filter Row */}
       <div className="table-filter-card">

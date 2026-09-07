@@ -11,24 +11,40 @@ import { fetchWithAuth } from '../services/apiClient';
 export const DashboardPage: React.FC = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadMetrics = () => {
+    setLoading(true);
+    setError(null);
     fetchWithAuth('/admin/dashboard/metrics')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
+      .then((res) => {
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
         if (data) {
           setMetrics(data);
         }
         setLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('Error fetching dashboard metrics', err);
+        setError('Server is taking longer to respond (Render cold start). You can retry or view cached metrics.');
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadMetrics();
   }, []);
 
   if (loading) {
-    return <div className="page-container flex-center" style={{ minHeight: 300 }}>Loading dashboard analytics...</div>;
+    return (
+      <div className="page-container flex-center" style={{ minHeight: 350, flexDirection: 'column', gap: 12 }}>
+        <div style={{ width: 36, height: 36, border: '3px solid #E5E7EB', borderTopColor: '#7126D0', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Connecting to CelebStash backend & loading analytics...</p>
+      </div>
+    );
   }
 
   // Fallback structure
@@ -97,6 +113,40 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#FEF3C7',
+            color: '#92400E',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            border: '1px solid #FCD34D',
+          }}
+        >
+          <span>⚠️ {error}</span>
+          <button
+            onClick={loadMetrics}
+            style={{
+              background: '#D97706',
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '4px 12px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '12px',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Metric Cards Row */}
       <div className="stats-grid">

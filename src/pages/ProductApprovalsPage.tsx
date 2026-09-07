@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Download, Filter, Calendar, LayoutGrid, List } from 'lucide-react';
-import { INITIAL_PRODUCT_APPROVALS } from '../data/mockAdminData';
 import type { ProductApproval } from '../types';
 import { fetchWithAuth } from '../services/apiClient';
 import { formatImageUrl } from '../utils/imageUrl';
@@ -10,13 +9,19 @@ export const ProductApprovalsPage: React.FC = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<ProductApproval[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  useEffect(() => {
+  const loadProducts = () => {
+    setLoading(true);
+    setError(null);
     fetchWithAuth('/products')
-      .then((res) => (res.ok ? res.json() : []))
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (Array.isArray(data)) {
           const apiProducts: ProductApproval[] = data.map((p: any) => {
@@ -47,9 +52,15 @@ export const ProductApprovalsPage: React.FC = () => {
         }
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn('Could not load products:', err);
+        setError('Could not connect to products service. Backend may be waking up.');
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadProducts();
   }, []);
 
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -105,11 +116,15 @@ export const ProductApprovalsPage: React.FC = () => {
           {/* Category Dropdown */}
           <div className="select-wrap">
             <Filter size={14} />
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
               <option value="All">Category: All</option>
-              <option value="Physical Merch">Physical Merch</option>
-              <option value="Audio Tracks">Audio Tracks</option>
-              <option value="Digital Art">Digital Art</option>
+              <option value="CLOTHING">Clothing & Drops</option>
+              <option value="MUSIC">Music & Audio</option>
+              <option value="AUCTION">Auction Items</option>
+              <option value="MERCH">Merchandise</option>
             </select>
           </div>
 
@@ -147,8 +162,46 @@ export const ProductApprovalsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid View (Image 5) */}
-      {viewMode === 'grid' ? (
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#FEF3C7',
+            color: '#92400E',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            border: '1px solid #FCD34D',
+          }}
+        >
+          <span>⚠️ {error}</span>
+          <button
+            onClick={loadProducts}
+            style={{
+              background: '#D97706',
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '4px 12px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '12px',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="page-container flex-center" style={{ minHeight: 250, flexDirection: 'column', gap: 12 }}>
+          <div style={{ width: 32, height: 32, border: '3px solid #E5E7EB', borderTopColor: '#7126D0', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading products from backend...</p>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="product-grid">
           {filteredProducts.length === 0 ? (
             <div className="empty-state">No products found matching filters.</div>

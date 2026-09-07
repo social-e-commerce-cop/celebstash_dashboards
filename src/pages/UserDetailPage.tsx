@@ -4,6 +4,7 @@ import { ArrowLeft, Globe, ThumbsUp, Share2, Mail, Calendar, Shield } from 'luci
 import { INITIAL_USERS_DIRECTORY } from '../data/mockAdminData';
 import type { UserDirectoryItem } from '../types';
 import { fetchWithAuth } from '../services/apiClient';
+import { formatImageUrl } from '../utils/imageUrl';
 
 export const UserDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,8 +16,30 @@ export const UserDetailPage: React.FC = () => {
   useEffect(() => {
     fetchWithAuth(`/users/${id}`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+      .then(async (data) => {
         const foundMock = INITIAL_USERS_DIRECTORY.find((u) => u.id === id);
+        let userPosts: any[] = foundMock ? foundMock.posts || [] : [];
+
+        // Attempt to fetch user's live posts from backend
+        try {
+          const postsRes = await fetchWithAuth(`/api/posts/user/${id}`);
+          if (postsRes.ok) {
+            const postsData = await postsRes.json();
+            const items = Array.isArray(postsData) ? postsData : postsData.content || [];
+            if (items.length > 0) {
+              userPosts = items.map((p: any) => ({
+                id: String(p.id),
+                artistName: p.userFullName || data?.fullName || 'Artist',
+                type: 'Image',
+                caption: p.description || '',
+                imageUrl: p.photoUrls && p.photoUrls.length > 0 ? formatImageUrl(p.photoUrls[0]) : formatImageUrl(p.videoUrl),
+                likes: p.likesCount || 0,
+                shares: p.sharesCount || 0,
+              }));
+            }
+          }
+        } catch (e) {}
+
         if (data) {
           setUser({
             id: String(data.id || id),
@@ -26,9 +49,9 @@ export const UserDetailPage: React.FC = () => {
             role: (data.role || (foundMock ? foundMock.role : 'USER')) as any,
             joinedDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : (foundMock ? foundMock.joinedDate : '2026-01-01'),
             status: (data.status || (foundMock ? foundMock.status : 'Active')) as any,
-            avatarUrl: data.profilePicture || (foundMock ? foundMock.avatarUrl : '/images/admin_avatar.png'),
+            avatarUrl: formatImageUrl(data.profilePicture) || (foundMock ? foundMock.avatarUrl : '/images/admin_avatar.png'),
             artistStatement: data.bio || (foundMock ? foundMock.artistStatement : ''),
-            posts: foundMock ? foundMock.posts : [],
+            posts: userPosts,
             socials: foundMock ? foundMock.socials : undefined,
           });
         } else {

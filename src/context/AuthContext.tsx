@@ -1,17 +1,20 @@
 import React, { createContext, useContext, useState } from 'react';
 import type { AdminUser } from '../types';
-import { fetchWithAuth } from '../services/apiClient';
+import { fetchWithAuth, API_BASE_URL } from '../services/apiClient';
 
 interface AuthContextType {
   user: AdminUser | null;
   isAuthenticated: boolean;
+  authError: string | null;
   login: (email: string, pass: string) => Promise<boolean>;
   logout: () => void;
+  clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [authError, setAuthError] = useState<string | null>(null);
   const [user, setUser] = useState<AdminUser | null>(() => {
     const saved = localStorage.getItem('zikii_admin_session');
     if (saved) {
@@ -49,26 +52,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, pass: string): Promise<boolean> => {
+    setAuthError(null);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null;
+
     try {
-      const response = await fetch('http://localhost:8080/api/v1/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller?.signal,
         body: JSON.stringify({
           identifier: email.trim(),
           email: email.trim(),
-          password: pass
-        })
+          password: pass,
+        }),
       });
 
-      const data = await response.json();
+      if (timeoutId) clearTimeout(timeoutId);
+
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok || data.success === false) {
-        throw new Error(data.message || 'Login failed');
+        const msg = data.message || (data.errors ? Object.values(data.errors).join('. ') : 'Invalid email or password');
+        setAuthError(msg);
+        return false;
       }
 
       const token = data.accessToken || data.token;
       if (!token) {
-        throw new Error('No token returned from server');
+        setAuthError('No authentication token returned by server.');
+        return false;
       }
 
       const adminUser: AdminUser = {
@@ -80,25 +93,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatarUrl: data.profilePicture || '/images/admin_avatar.png',
         token: token,
       };
-      
+
       setUser(adminUser);
       localStorage.setItem('zikii_admin_session', JSON.stringify(adminUser));
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      if (timeoutId) clearTimeout(timeoutId);
       console.error('Login error:', error);
+      if (error.name === 'AbortError') {
+        setAuthError('Connection timed out. Render backend may be waking up from cold start, please retry.');
+      } else {
+        setAuthError(error.message || 'Unable to connect to backend server. Please check connection.');
+      }
       return false;
     }
   };
 
   const logout = () => {
     setUser(null);
+    setAuthError(null);
     localStorage.removeItem('zikii_admin_session');
   };
+
+  const clearAuthError = () => setAuthError(null);
 
   const isAuthenticated = Boolean(user && user.token);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, authError, login, logout, clearAuthError }}>
       {children}
     </AuthContext.Provider>
   );

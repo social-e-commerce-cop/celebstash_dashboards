@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Globe, Check, XCircle, ShieldAlert } from 'lucide-react';
 import { INITIAL_ARTIST_APPLICATIONS } from '../data/mockAdminData';
-import type { ApplicationStatus, ArtistApplication } from '../types';
+import type { ArtistApplication } from '../types';
 import { fetchWithAuth } from '../services/apiClient';
+import { formatImageUrl } from '../utils/imageUrl';
 
 export const ArtistDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -27,7 +28,7 @@ export const ArtistDetailPage: React.FC = () => {
               socials: found.socialProofLink || found.socialLinks || '@artist',
               appliedDate: found.createdAt ? new Date(found.createdAt).toISOString().split('T')[0] : '2026-01-01',
               status: found.status === 'APPROVED' ? 'Approved' : found.status === 'REJECTED' ? 'Rejected' : 'Pending',
-              avatarUrl: found.userProfilePicture || found.user?.profilePicture || '/images/admin_avatar.png',
+              avatarUrl: formatImageUrl(found.userProfilePicture || found.user?.profilePicture),
               artistStatement: found.bio || 'Applicant bio statement.',
               externalPortfolios: found.socialProofLink
                 ? found.socialProofLink.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)

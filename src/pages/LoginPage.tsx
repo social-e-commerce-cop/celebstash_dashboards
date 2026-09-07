@@ -5,19 +5,23 @@ import { CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, authError, clearAuthError } = useAuth();
 
   const [email, setEmail] = useState('karabogretta@gmail.com');
   const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) {
-      navigate('/');
-    } else {
-      alert("Invalid credentials.");
+    setIsLoggingIn(true);
+    try {
+      const success = await login(email, password);
+      if (success) {
+        navigate('/');
+      }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -49,6 +53,23 @@ export const LoginPage: React.FC = () => {
           <h2 className="login-welcome-title">Welcome Back!</h2>
           <p className="login-welcome-sub">Please Login or Signup to your account here</p>
 
+          {authError && (
+            <div
+              style={{
+                backgroundColor: '#FEE2E2',
+                color: '#DC2626',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                marginBottom: '16px',
+                lineHeight: '1.4',
+                border: '1px solid #FCA5A5',
+              }}
+            >
+              {authError}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="login-form">
             {/* Email Field */}
             <div className="form-group">
@@ -57,7 +78,10 @@ export const LoginPage: React.FC = () => {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    if (authError) clearAuthError();
+                    setEmail(e.target.value);
+                  }}
                   placeholder="Enter your email"
                   required
                 />
@@ -72,7 +96,10 @@ export const LoginPage: React.FC = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    if (authError) clearAuthError();
+                    setPassword(e.target.value);
+                  }}
                   placeholder="Enter your password"
                   required
                 />
@@ -102,8 +129,13 @@ export const LoginPage: React.FC = () => {
             </div>
 
             {/* Submit Button */}
-            <button type="submit" className="login-submit-btn">
-              Login
+            <button
+              type="submit"
+              className="login-submit-btn"
+              disabled={isLoggingIn}
+              style={{ opacity: isLoggingIn ? 0.7 : 1, cursor: isLoggingIn ? 'not-allowed' : 'pointer' }}
+            >
+              {isLoggingIn ? 'Signing in...' : 'Login'}
             </button>
 
             <div className="demo-credentials-note">
