@@ -39,12 +39,12 @@ export const ProductApprovalsPage: React.FC = () => {
               imageUrl: formattedImgs[0],
               thumbnails: formattedImgs,
               status: p.status === 'APPROVED' ? 'Approved' : p.status === 'REJECTED' ? 'Rejected' : 'Pending',
-              appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-01-01',
+              appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '—',
               marketplaceTarget: 'Drop Store',
-              dropLimit: p.stockQuantity || 100,
-              materialDescription: p.description || 'Premium material',
-              sizes: p.sizeStock && Object.keys(p.sizeStock).length > 0 ? Object.keys(p.sizeStock) : (p.sizes || ['S', 'M', 'L', 'XL']),
-              colors: Array.isArray(p.availableColors) && p.availableColors.length > 0 ? p.availableColors : (p.colors || ['Black', 'White']),
+              dropLimit: p.stockQuantity ?? 0,
+              materialDescription: p.description || 'No description provided.',
+              sizes: p.sizeStock && Object.keys(p.sizeStock).length > 0 ? Object.keys(p.sizeStock) : (p.sizes || []),
+              colors: Array.isArray(p.availableColors) && p.availableColors.length > 0 ? p.availableColors : (p.colors || []),
               sizeStock: p.sizeStock || {},
             };
           });

@@ -4,7 +4,7 @@ import { Timer, ArrowUpRight } from 'lucide-react';
 interface StatCardProps {
   title: string;
   value: string;
-  change: string;
+  change?: string;
   isHighlighted?: boolean;
 }
 
@@ -18,13 +18,19 @@ export const StatCard: React.FC<StatCardProps> = ({ title, value, change, isHigh
         </div>
       </div>
       <div className="stat-value">{value}</div>
-      <div className="stat-growth">
-        <span className="growth-badge">
-          <ArrowUpRight size={12} />
-          {change}
-        </span>
-        <span className="growth-sub">vs last week</span>
-      </div>
+      {change ? (
+        <div className="stat-growth">
+          <span className="growth-badge">
+            <ArrowUpRight size={12} />
+            {change}
+          </span>
+          <span className="growth-sub">vs last week</span>
+        </div>
+      ) : (
+        <div className="stat-growth">
+          <span className="growth-sub">Current backend total</span>
+        </div>
+      )}
     </div>
   );
 };

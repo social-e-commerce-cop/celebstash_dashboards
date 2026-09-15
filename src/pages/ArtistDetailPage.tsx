@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Globe, Check, XCircle, ShieldAlert } from 'lucide-react';
-import { INITIAL_ARTIST_APPLICATIONS } from '../data/mockAdminData';
 import type { ArtistApplication } from '../types';
 import { fetchWithAuth } from '../services/apiClient';
 import { formatImageUrl } from '../utils/imageUrl';
@@ -11,39 +10,51 @@ export const ArtistDetailPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [application, setApplication] = useState<ArtistApplication | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchWithAuth('/admin/artist-applications')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (Array.isArray(data)) {
-          const found = data.find((app: any) => String(app.id) === id);
-          if (found) {
-            setApplication({
-              id: String(found.id),
-              name: found.userFullName || found.user?.fullName || found.stageName || 'Artist Applicant',
-              username: found.username || found.user?.username || '',
-              title: found.category || found.genre || 'Artist',
-              email: found.userEmail || found.user?.email || 'N/A',
-              socials: found.socialProofLink || found.socialLinks || '@artist',
-              appliedDate: found.createdAt ? new Date(found.createdAt).toISOString().split('T')[0] : '2026-01-01',
-              status: found.status === 'APPROVED' ? 'Approved' : found.status === 'REJECTED' ? 'Rejected' : 'Pending',
-              avatarUrl: formatImageUrl(found.userProfilePicture || found.user?.profilePicture),
-              artistStatement: found.bio || 'Applicant bio statement.',
-              externalPortfolios: found.socialProofLink
-                ? found.socialProofLink.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
-                : ['instagram.com/artist'],
-            });
-            return;
+    setLoading(true);
+    setError(null);
+    fetchWithAuth(`/admin/artist-applications/${id}`)
+      .then(async (res) => {
+        if (res.ok) {
+          return res.json();
+        }
+        // Fallback to searching the list if single endpoint isn't supported yet or returns 404
+        const listRes = await fetchWithAuth('/admin/artist-applications');
+        if (listRes.ok) {
+          const list = await listRes.json();
+          if (Array.isArray(list)) {
+            const found = list.find((app: any) => String(app.id) === id);
+            if (found) return found;
           }
         }
-        const mockFound = INITIAL_ARTIST_APPLICATIONS.find((a) => a.id === id);
-        if (mockFound) setApplication(mockFound);
+        throw new Error('Artist application not found');
       })
-      .catch(() => {
-        const mockFound = INITIAL_ARTIST_APPLICATIONS.find((a) => a.id === id);
-        if (mockFound) setApplication(mockFound);
-      });
+      .then((found) => {
+        if (found) {
+          setApplication({
+            id: String(found.id),
+            name: found.userFullName || found.user?.fullName || found.stageName || 'Artist Applicant',
+            username: found.username || found.user?.username || '',
+            title: found.category || found.genre || 'Artist',
+            email: found.userEmail || found.user?.email || 'N/A',
+            socials: found.socialProofLink || found.socialLinks || '@artist',
+            appliedDate: found.createdAt ? new Date(found.createdAt).toISOString().split('T')[0] : '2026-01-01',
+            status: found.status === 'APPROVED' ? 'Approved' : found.status === 'REJECTED' ? 'Rejected' : 'Pending',
+            avatarUrl: formatImageUrl(found.userProfilePicture || found.user?.profilePicture),
+            artistStatement: found.bio || 'Applicant bio statement.',
+            externalPortfolios: found.socialProofLink
+              ? found.socialProofLink.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+              : [],
+          });
+        }
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to load application');
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -108,14 +119,36 @@ export const ArtistDetailPage: React.FC = () => {
       });
   };
 
-  if (!application) {
+  if (loading) {
     return (
-      <div className="page-container">
-        <button className="btn-secondary flex-align" style={{ gap: 8 }} onClick={() => navigate('/artist-applications')}>
+      <div className="page-container" style={{ maxWidth: 900 }}>
+        <button
+          className="btn-clear flex-align"
+          style={{ gap: 6, padding: 0, marginBottom: 16, color: 'var(--text-muted)' }}
+          onClick={() => navigate('/artist-applications')}
+        >
           <ArrowLeft size={16} />
           <span>Back to Artist Applications</span>
         </button>
-        <div className="empty-state">Application not found.</div>
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          Loading application details...
+        </div>
+      </div>
+    );
+  }
+
+  if (!application) {
+    return (
+      <div className="page-container" style={{ maxWidth: 900 }}>
+        <button
+          className="btn-clear flex-align"
+          style={{ gap: 6, padding: 0, marginBottom: 16, color: 'var(--text-muted)' }}
+          onClick={() => navigate('/artist-applications')}
+        >
+          <ArrowLeft size={16} />
+          <span>Back to Artist Applications</span>
+        </button>
+        <div className="empty-state">{error || 'Application not found.'}</div>
       </div>
     );
   }

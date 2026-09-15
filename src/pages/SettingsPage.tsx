@@ -5,8 +5,9 @@ import { fetchWithAuth } from '../services/apiClient';
 
 export const SettingsPage: React.FC = () => {
   const { user } = useAuth();
-  const [fullName, setFullName] = useState(user?.fullName || 'Emmy Gretta');
-  const [email, setEmail] = useState(user?.email || 'karabogretta@gmail.com');
+  // Seeded from the signed-in admin — never a hardcoded identity.
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [autoApprove, setAutoApprove] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -20,9 +21,10 @@ export const SettingsPage: React.FC = () => {
     try {
       const res = await fetchWithAuth('/users/me', {
         method: 'PUT',
+        // Only send what this form actually edits. Username is not shown here, and
+        // deriving one from the email would silently rename the account on every save.
         body: JSON.stringify({
           fullName: fullName.trim(),
-          username: user?.email?.split('@')[0] || 'admin',
         }),
       });
 

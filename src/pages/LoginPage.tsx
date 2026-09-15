@@ -7,8 +7,8 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login, authError, clearAuthError } = useAuth();
 
-  const [email, setEmail] = useState('karabogretta@gmail.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
@@ -139,8 +139,7 @@ export const LoginPage: React.FC = () => {
             </button>
 
             <div className="demo-credentials-note">
-              <span>🔑 Seeded Admin Account: </span>
-              <strong>karabogretta@gmail.com</strong>
+              <span>Admin role required. Use your CelebStash administrator account.</span>
             </div>
           </form>
         </div>

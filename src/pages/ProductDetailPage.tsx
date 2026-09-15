@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, XCircle } from 'lucide-react';
-import { INITIAL_PRODUCT_APPROVALS } from '../data/mockAdminData';
 import { fetchWithAuth } from '../services/apiClient';
 import { formatImageUrl } from '../utils/imageUrl';
 import type { ProductApproval } from '../types';
@@ -13,52 +12,59 @@ export const ProductDetailPage: React.FC = () => {
   const [product, setProduct] = useState<ProductApproval | null>(null);
   const [selectedImg, setSelectedImg] = useState<string>('');
   const [selectedSize, setSelectedSize] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadProduct = React.useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+
+    fetchWithAuth(`/products/${id}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          if (res.status === 403) throw new Error("You don't have permission to view this product.");
+          if (res.status === 404) throw new Error('This product no longer exists.');
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `Server returned ${res.status}.`);
+        }
+        return res.json();
+      })
+      .then((p) => {
+        const rawImgs: string[] = Array.isArray(p.imageUrls) && p.imageUrls.length > 0
+          ? p.imageUrls
+          : [p.imageUrl || '/images/admin_avatar.png'];
+        const formattedImgs = rawImgs.map((imgUrl) => formatImageUrl(imgUrl));
+
+        const apiProduct: ProductApproval = {
+          id: String(p.id),
+          title: p.name || p.title || 'Product',
+          artist: p.sellerName || p.seller?.fullName || p.seller?.username || p.artistName || p.artist?.fullName || p.artist?.username || 'Artist',
+          category: p.productType || p.category || 'CLOTHING',
+          price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
+          imageUrl: formattedImgs[0],
+          thumbnails: formattedImgs,
+          status: p.status === 'APPROVED' ? 'Approved' : p.status === 'REJECTED' ? 'Rejected' : 'Pending',
+          appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '—',
+          marketplaceTarget: 'Drop Store',
+          dropLimit: p.stockQuantity ?? 0,
+          materialDescription: p.description || 'No description provided.',
+          sizes: p.sizeStock && Object.keys(p.sizeStock).length > 0 ? Object.keys(p.sizeStock) : (p.sizes || []),
+          colors: Array.isArray(p.availableColors) && p.availableColors.length > 0 ? p.availableColors : (p.colors || []),
+          sizeStock: p.sizeStock || {},
+        };
+        setProduct(apiProduct);
+        setSelectedImg(apiProduct.imageUrl);
+      })
+      .catch((err: Error) => {
+        setProduct(null);
+        setLoadError(err.message || 'Could not reach the backend server.');
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
 
   useEffect(() => {
-    fetchWithAuth(`/products/${id}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((p) => {
-        if (p) {
-          const rawImgs: string[] = Array.isArray(p.imageUrls) && p.imageUrls.length > 0
-            ? p.imageUrls
-            : [p.imageUrl || '/images/admin_avatar.png'];
-          const formattedImgs = rawImgs.map((imgUrl) => formatImageUrl(imgUrl));
-
-          const apiProduct: ProductApproval = {
-            id: String(p.id),
-            title: p.name || p.title || 'Product',
-            artist: p.sellerName || p.seller?.fullName || p.seller?.username || p.artistName || p.artist?.fullName || p.artist?.username || 'Artist',
-            category: p.productType || p.category || 'CLOTHING',
-            price: typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0,
-            imageUrl: formattedImgs[0],
-            thumbnails: formattedImgs,
-            status: p.status === 'APPROVED' ? 'Approved' : p.status === 'REJECTED' ? 'Rejected' : 'Pending',
-            appliedDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-01-01',
-            marketplaceTarget: 'Drop Store',
-            dropLimit: p.stockQuantity || 100,
-            materialDescription: p.description || 'Premium material',
-            sizes: p.sizeStock && Object.keys(p.sizeStock).length > 0 ? Object.keys(p.sizeStock) : (p.sizes || ['S', 'M', 'L', 'XL']),
-            colors: Array.isArray(p.availableColors) && p.availableColors.length > 0 ? p.availableColors : (p.colors || ['Black', 'White']),
-            sizeStock: p.sizeStock || {},
-          };
-          setProduct(apiProduct);
-          setSelectedImg(apiProduct.imageUrl);
-        } else {
-          const found = INITIAL_PRODUCT_APPROVALS.find((item) => item.id === id);
-          if (found) {
-            setProduct(found);
-            setSelectedImg(found.imageUrl);
-          }
-        }
-      })
-      .catch(() => {
-        const found = INITIAL_PRODUCT_APPROVALS.find((item) => item.id === id);
-        if (found) {
-          setProduct(found);
-          setSelectedImg(found.imageUrl);
-        }
-      });
-  }, [id]);
+    loadProduct();
+  }, [loadProduct]);
 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -129,9 +135,43 @@ export const ProductDetailPage: React.FC = () => {
           <ArrowLeft size={16} />
           <span>Back to Product Approvals</span>
         </button>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
-          Loading product details...
-        </div>
+
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+            Loading product details...
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#FEF2F2',
+              color: '#991B1B',
+              padding: '14px 18px',
+              borderRadius: 8,
+              fontSize: 13,
+              border: '1px solid #FCA5A5',
+            }}
+          >
+            <span>⚠️ {loadError || 'Product details are unavailable.'}</span>
+            <button
+              onClick={loadProduct}
+              style={{
+                background: '#DC2626',
+                color: '#FFF',
+                border: 'none',
+                borderRadius: 6,
+                padding: '4px 12px',
+                cursor: 'pointer',
+                fontWeight: 500,
+                fontSize: 12,
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
     );
   }

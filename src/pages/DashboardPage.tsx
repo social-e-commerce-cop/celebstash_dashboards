@@ -22,9 +22,7 @@ export const DashboardPage: React.FC = () => {
         return res.json();
       })
       .then((data) => {
-        if (data) {
-          setMetrics(data);
-        }
+        setMetrics(data);
         setLoading(false);
       })
       .catch((err) => {
@@ -47,16 +45,51 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  // Fallback structure
-  const data = metrics || {
-    totalUsers: 5,
-    totalProducts: 4,
-    totalArtists: 2,
-    totalEarnings: 1250,
-    entityCounts: [],
-    userGrowth: [],
-    revenueData: []
-  };
+  if (!metrics) {
+    return (
+      <div className="page-container">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Dashboard</h1>
+            <p className="page-subtitle">Daily operations, marketplace analytics and creative metrics.</p>
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#FEF3C7',
+            color: '#92400E',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            border: '1px solid #FCD34D',
+          }}
+        >
+          <span>⚠️ {error || 'Dashboard metrics are unavailable.'}</span>
+          <button
+            onClick={loadMetrics}
+            style={{
+              background: '#D97706',
+              color: '#FFF',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '4px 12px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '12px',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const data = metrics;
 
   const donutData = Array.isArray(data.entityCounts) && data.entityCounts.length > 0
     ? data.entityCounts.map((item: any) => ({
@@ -76,21 +109,11 @@ export const DashboardPage: React.FC = () => {
         Artists: g.artists !== undefined ? g.artists : (g.Artists || 0),
         Users: g.users !== undefined ? g.users : (g.Users || 0)
       }))
-    : [
-        { month: 'Jan', Artists: 150, Users: 420 },
-        { month: 'Feb', Artists: 210, Users: 450 },
-        { month: 'Mar', Artists: 190, Users: 440 },
-        { month: 'Apr', Artists: Math.max(240, Number(data.totalArtists || 0)), Users: Math.max(480, Number(data.totalUsers || 0)) }
-      ];
+    : [];
 
   const revenueData = Array.isArray(data.revenueData) && data.revenueData.length > 0
     ? data.revenueData
-    : [
-        { month: 'Jan', revenue: 45 },
-        { month: 'Feb', revenue: 70 },
-        { month: 'Mar', revenue: 52 },
-        { month: 'Apr', revenue: Number(data.totalEarnings || 105) }
-      ];
+    : [];
 
   const totalDonutItems = donutData.reduce((acc: number, curr: any) => acc + curr.value, 0);
 
@@ -150,10 +173,10 @@ export const DashboardPage: React.FC = () => {
 
       {/* Metric Cards Row */}
       <div className="stats-grid">
-        <StatCard title="Total Users" value={data.totalUsers.toLocaleString()} change="+12.3%" />
-        <StatCard title="Total Products" value={data.totalProducts.toLocaleString()} change="+8.1%" />
-        <StatCard title="Total Artists" value={data.totalArtists.toLocaleString()} change="+15.4%" />
-        <StatCard title="Total Earnings" value={`$${data.totalEarnings.toLocaleString()}`} change="+5.2%" isHighlighted />
+        <StatCard title="Total Users" value={data.totalUsers.toLocaleString()} />
+        <StatCard title="Total Products" value={data.totalProducts.toLocaleString()} />
+        <StatCard title="Total Artists" value={data.totalArtists.toLocaleString()} />
+        <StatCard title="Total Earnings" value={`$${Number(data.totalEarnings || 0).toLocaleString()}`} isHighlighted />
       </div>
 
       {/* Analytics Charts Grid */}
@@ -238,9 +261,9 @@ export const DashboardPage: React.FC = () => {
             <h3 className="card-title">Revenue Streams</h3>
             <p className="card-sub">Monthly sales totals from digital & physical products</p>
           </div>
-          <div className="revenue-highlight">
-            +$185.2K
-          </div>
+            <div className="revenue-highlight">
+              Historical monthly series is not stored; showing current totals only.
+            </div>
         </div>
 
         <div style={{ width: '100%', height: 220, marginTop: 24 }}>

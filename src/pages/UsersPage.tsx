@@ -1,9 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Download, Eye, Lock } from 'lucide-react';
+import { Search, Download, Eye, Lock, Unlock } from 'lucide-react';
 import type { UserDirectoryItem } from '../types';
 import { fetchWithAuth } from '../services/apiClient';
 import { formatImageUrl } from '../utils/imageUrl';
+
+/**
+ * Backend account statuses (AccountStatus enum) mapped to the directory's display values.
+ * DISABLED is the admin-initiated block; LOCKED is a system lock. Both read as "Blocked".
+ */
+const toDisplayStatus = (status?: string): UserDirectoryItem['status'] => {
+  switch (String(status || '').toUpperCase()) {
+    case 'DISABLED':
+    case 'LOCKED':
+      return 'Blocked';
+    case 'PENDING':
+      return 'Pending';
+    default:
+      return 'Active';
+  }
+};
 
 export const UsersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +27,7 @@ export const UsersPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingStatusId, setPendingStatusId] = useState<string | null>(null);
 
   const loadUsers = () => {
     setLoading(true);
@@ -28,8 +45,8 @@ export const UsersPage: React.FC = () => {
             username: u.username || '',
             email: u.email || 'N/A',
             role: u.role || 'USER',
-            joinedDate: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '2026-01-01',
-            status: u.status === 'ACTIVE' ? 'Active' : u.status === 'BLOCKED' ? 'Blocked' : 'Active',
+            joinedDate: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '—',
+            status: toDisplayStatus(u.status),
             avatarUrl: formatImageUrl(u.profilePicture),
             artistStatement: u.bio || '',
           }));
@@ -47,6 +64,35 @@ export const UsersPage: React.FC = () => {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  /** Block (DISABLED) or restore (ACTIVE) an account against the backend. */
+  const toggleUserBlocked = async (user: UserDirectoryItem) => {
+    const nextStatus = user.status === 'Blocked' ? 'ACTIVE' : 'DISABLED';
+    setPendingStatusId(user.id);
+    try {
+      const res = await fetchWithAuth(`/users/${user.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || `Failed to update account status (HTTP ${res.status}).`);
+        return;
+      }
+
+      const updated = await res.json();
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === user.id ? { ...item, status: toDisplayStatus(updated.status) } : item
+        )
+      );
+    } catch {
+      alert('Could not reach the backend to update this account.');
+    } finally {
+      setPendingStatusId(null);
+    }
+  };
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const ITEMS_PER_PAGE = 10;
@@ -123,8 +169,8 @@ export const UsersPage: React.FC = () => {
           <div className="stat-value">{users.length}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-title">New This Month</div>
-          <div className="stat-value">{users.length}</div>
+          <div className="stat-title">Blocked</div>
+          <div className="stat-value">{users.filter((u) => u.status === 'Blocked').length}</div>
         </div>
         <div className="stat-card">
           <div className="stat-title">Active</div>
@@ -217,14 +263,11 @@ export const UsersPage: React.FC = () => {
                       </button>
                       <button
                         className="icon-action-btn danger"
-                        title="Block User"
-                        onClick={() => {
-                          setUsers((prev) =>
-                            prev.map((item) => (item.id === u.id ? { ...item, status: 'Blocked' } : item))
-                          );
-                        }}
+                        title={u.status === 'Blocked' ? 'Unblock User' : 'Block User'}
+                        disabled={pendingStatusId === u.id}
+                        onClick={() => toggleUserBlocked(u)}
                       >
-                        <Lock size={14} />
+                        {u.status === 'Blocked' ? <Unlock size={14} /> : <Lock size={14} />}
                       </button>
                     </div>
                   </td>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import type { AdminUser } from '../types';
-import { fetchWithAuth, API_BASE_URL } from '../services/apiClient';
+import { API_BASE_URL, isAdminRole, onAdminLogout } from '../services/apiClient';
 
 interface AuthContextType {
   user: AdminUser | null;
@@ -13,43 +13,76 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const readStoredAdmin = (): AdminUser | null => {
+  const saved = localStorage.getItem('zikii_admin_session');
+  if (!saved) return null;
+  try {
+    const parsed = JSON.parse(saved);
+    if (parsed && parsed.token && isAdminRole(parsed.role)) {
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to parse admin session', e);
+  }
+  localStorage.removeItem('zikii_admin_session');
+  return null;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [authError, setAuthError] = useState<string | null>(null);
-  const [user, setUser] = useState<AdminUser | null>(() => {
-    const saved = localStorage.getItem('zikii_admin_session');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.token) return parsed;
-      } catch (e) {
-        console.error('Failed to parse admin session', e);
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<AdminUser | null>(() => readStoredAdmin());
 
   React.useEffect(() => {
-    fetchWithAuth('/users/me')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) {
-          setUser((prev) => {
-            const updated: AdminUser = {
-              id: String(data.id || prev?.id || 'admin_user'),
-              email: data.email || prev?.email || '',
-              fullName: data.fullName || data.name || prev?.fullName || 'Admin',
-              name: data.fullName || data.name || prev?.name || 'Admin',
-              role: data.role || prev?.role || 'ADMIN',
-              avatarUrl: data.profilePicture || prev?.avatarUrl || '/images/admin_avatar.png',
-              token: prev?.token || '',
-            };
-            localStorage.setItem('zikii_admin_session', JSON.stringify(updated));
-            return updated;
-          });
+    return onAdminLogout(() => {
+      setUser(null);
+      setAuthError(null);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (!user?.token) return;
+
+    const controller = new AbortController();
+    fetch(`${API_BASE_URL}/api/v1/users/me`, {
+      headers: {
+        Authorization: `Bearer ${user.token}`,
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (res.status === 401) {
+          logout();
+          return null;
         }
+        return res.ok ? res.json() : null;
+      })
+      .then((data) => {
+        if (!data) return;
+        if (!isAdminRole(data.role)) {
+          setAuthError('This dashboard is restricted to administrators.');
+          logout();
+          return;
+        }
+        setUser((prev) => {
+          if (!prev?.token) return prev;
+          const updated: AdminUser = {
+            id: String(data.id || prev.id),
+            email: data.email || prev.email || '',
+            fullName: data.fullName || data.name || prev.fullName || 'Admin',
+            name: data.fullName || data.name || prev.name || 'Admin',
+            role: data.role,
+            avatarUrl: data.profilePicture || prev.avatarUrl || '/images/admin_avatar.png',
+            token: prev.token,
+          };
+          localStorage.setItem('zikii_admin_session', JSON.stringify(updated));
+          return updated;
+        });
       })
       .catch(() => {});
-  }, []);
+
+    return () => controller.abort();
+  }, [user?.token]);
 
   const login = async (email: string, pass: string): Promise<boolean> => {
     setAuthError(null);
@@ -84,12 +117,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
+      if (!isAdminRole(data.role)) {
+        setAuthError('This dashboard is restricted to administrators.');
+        return false;
+      }
+
       const adminUser: AdminUser = {
-        id: String(data.userId || data.id || 'admin_user'),
+        id: String(data.userId || data.id || ''),
         email: data.email || email.trim(),
         fullName: data.fullName || data.full_name || email.split('@')[0],
         name: data.fullName || data.full_name || email.split('@')[0],
-        role: data.role || 'ADMIN',
+        role: data.role,
         avatarUrl: data.profilePicture || '/images/admin_avatar.png',
         token: token,
       };
@@ -117,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearAuthError = () => setAuthError(null);
 
-  const isAuthenticated = Boolean(user && user.token);
+  const isAuthenticated = Boolean(user && user.token && isAdminRole(user.role));
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated, authError, login, logout, clearAuthError }}>

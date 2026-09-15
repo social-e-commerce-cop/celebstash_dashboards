@@ -1,5 +1,28 @@
 import { API_BASE_URL } from '../services/apiClient';
 
+/**
+ * Ensures a Cloudinary delivery URL carries the `f_auto` transformation.
+ *
+ * Phones upload in their native format — iOS sends HEIC, which no mainstream browser can render,
+ * so such an image loads on the phone but appears broken here. `f_auto` makes Cloudinary transcode
+ * per request (WebP/JPEG) and `q_auto` trims the payload. Applied defensively so URLs already
+ * stored without a transformation still display.
+ */
+function withCloudinaryAutoFormat(url: string): string {
+  if (!url.includes('res.cloudinary.com')) return url;
+
+  const marker = '/upload/';
+  const idx = url.indexOf(marker);
+  if (idx < 0) return url;
+
+  const insertAt = idx + marker.length;
+  const rest = url.slice(insertAt);
+  // Already transformed (a transformation segment precedes the /v<version>/ or public id).
+  if (/^[^/]*(^|,)(f_auto|f_)/.test(rest)) return url;
+
+  return `${url.slice(0, insertAt)}f_auto,q_auto/${rest}`;
+}
+
 export function formatImageUrl(url?: string | null): string {
   if (!url) return '/images/admin_avatar.png';
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
@@ -14,7 +37,7 @@ export function formatImageUrl(url?: string | null): string {
         return `${API_BASE_URL}${parsed.pathname}${parsed.search}`;
       }
     } catch (e) {}
-    return url;
+    return withCloudinaryAutoFormat(url);
   }
   return url;
 }
