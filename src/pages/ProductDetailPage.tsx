@@ -133,7 +133,7 @@ export const ProductDetailPage: React.FC = () => {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 24 }}>
+      <div className="product-detail-grid">
         {/* Left Side: Images */}
         <div className="card-box">
           <div className="product-hero-wrap" style={{ height: 320 }}>
@@ -305,7 +305,7 @@ export const ProductDetailPage: React.FC = () => {
 
           {/* Action Buttons / Status Banner */}
           <div className="modal-actions" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
-            {product.status === 'Approved' || product.status === 'APPROVED' ? (
+            {product.status === 'Approved' || (product.status as string) === 'APPROVED' ? (
               <div style={{
                 width: '100%',
                 padding: '12px 20px',
@@ -323,7 +323,7 @@ export const ProductDetailPage: React.FC = () => {
                 <Check size={18} color="#10B981" />
                 <span>Product Approved & Published to Shop</span>
               </div>
-            ) : product.status === 'Rejected' || product.status === 'REJECTED' ? (
+            ) : product.status === 'Rejected' || (product.status as string) === 'REJECTED' ? (
               <div style={{
                 width: '100%',
                 padding: '12px 20px',

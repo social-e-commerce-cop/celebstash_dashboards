@@ -18,7 +18,7 @@ export const ProductApprovalsPage: React.FC = () => {
     fetchWithAuth('/products')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           const apiProducts: ProductApproval[] = data.map((p: any) => {
             const rawImgs: string[] = Array.isArray(p.imageUrls) && p.imageUrls.length > 0
               ? p.imageUrls
@@ -44,10 +44,13 @@ export const ProductApprovalsPage: React.FC = () => {
             };
           });
           setProducts(apiProducts);
+        } else {
+          setProducts(INITIAL_PRODUCT_APPROVALS);
         }
         setLoading(false);
       })
       .catch(() => {
+        setProducts(INITIAL_PRODUCT_APPROVALS);
         setLoading(false);
       });
   }, []);
@@ -148,7 +151,9 @@ export const ProductApprovalsPage: React.FC = () => {
       </div>
 
       {/* Grid View (Image 5) */}
-      {viewMode === 'grid' ? (
+      {loading ? (
+        <div className="empty-state">Loading products...</div>
+      ) : viewMode === 'grid' ? (
         <div className="product-grid">
           {filteredProducts.length === 0 ? (
             <div className="empty-state">No products found matching filters.</div>

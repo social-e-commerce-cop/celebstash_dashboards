@@ -1,27 +1,35 @@
 import React, { useState } from 'react';
-import { Search, Bell, ChevronDown, LogOut } from 'lucide-react';
+import { Search, Bell, ChevronDown, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface HeaderProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  onToggleSidebar?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange }) => {
+export const Header: React.FC<HeaderProps> = ({ searchQuery, onSearchChange, onToggleSidebar }) => {
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
     <header className="admin-header">
-      {/* Search Input */}
-      <div className="search-bar">
-        <Search size={16} className="search-icon" />
-        <input
-          type="text"
-          placeholder="Search, anything"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-        />
+      <div className="header-left">
+        {/* Menu Toggle for Mobile */}
+        <button className="menu-toggle-btn" onClick={onToggleSidebar} aria-label="Toggle menu">
+          <Menu size={22} />
+        </button>
+
+        {/* Search Input */}
+        <div className="search-bar">
+          <Search size={16} className="search-icon" />
+          <input
+            type="text"
+            placeholder="Search, anything..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Right Controls */}

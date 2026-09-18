@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Globe, Check, XCircle, ShieldAlert } from 'lucide-react';
 import { INITIAL_ARTIST_APPLICATIONS } from '../data/mockAdminData';
-import type { ApplicationStatus, ArtistApplication } from '../types';
+import type { ArtistApplication } from '../types';
 import { fetchWithAuth } from '../services/apiClient';
 
 export const ArtistDetailPage: React.FC = () => {

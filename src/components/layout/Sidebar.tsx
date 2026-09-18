@@ -2,7 +2,12 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, UserCheck, PackageCheck, Users, Settings } from 'lucide-react';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { label: 'Artist Applications', path: '/artist-applications', icon: UserCheck },
@@ -12,8 +17,8 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="sidebar">
-      {/* Brand Logo */}
+    <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
+      {/* Brand Header */}
       <div className="brand-header">
         <div className="logo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -22,6 +27,14 @@ export const Sidebar: React.FC = () => {
           </svg>
         </div>
         <span className="brand-text">ZIKII.</span>
+
+        {/* Mobile Close Button */}
+        <button className="mobile-sidebar-close" onClick={onClose} aria-label="Close menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
       {/* Navigation */}
@@ -32,6 +45,7 @@ export const Sidebar: React.FC = () => {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={onClose}
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
             >
               <Icon className="nav-icon" size={18} />

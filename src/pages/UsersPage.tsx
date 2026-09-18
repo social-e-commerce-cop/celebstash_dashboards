@@ -15,7 +15,7 @@ export const UsersPage: React.FC = () => {
     fetchWithAuth('/users')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           const apiUsers: UserDirectoryItem[] = data.map((u: any) => ({
             id: String(u.id),
             name: u.fullName || u.username || 'User',
@@ -28,10 +28,13 @@ export const UsersPage: React.FC = () => {
             artistStatement: u.bio || '',
           }));
           setUsers(apiUsers);
+        } else {
+          setUsers(INITIAL_USERS_DIRECTORY);
         }
         setLoading(false);
       })
       .catch(() => {
+        setUsers(INITIAL_USERS_DIRECTORY);
         setLoading(false);
       });
   }, []);
